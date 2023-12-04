@@ -1,0 +1,27 @@
+
+log_dir: logs
+
+checks:
+  dftest:
+    command: cat dftest.data
+    limit: 95
+    limit_/var: 90
+    ignore: ^tmpfs|^udev|^/dev/loop
+  
+  urltest:
+    command: cat urltest.data
+    url: http://ignore/
+    followup: 1 6
+    log_file: urltest.log
+  
+  test1:
+    label: test A
+    cycle: 0
+  
+  test2:
+    label: test B
+    cycle: 3
+
+  test: test1 test2
+  
+  proc: dftest urltest
