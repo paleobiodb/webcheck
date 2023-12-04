@@ -32,7 +32,7 @@ use YAML::Tiny;
 
 
 my %TOPLEVEL = (checks => 1, log_dir => 1, log_file => 1, state_dir => 1,
-		sendmail => 1, from => 1,
+		sendmail => 1, sendmail_report => 1, from => 1,
 		url_command => 1, url_followup => 1, 
 		df_command => 1, df_limit => 1);
 
@@ -49,7 +49,7 @@ my $state_dir;
 
 my $REPORT = '';
 my $CHECK;
-my $QUIET;
+my $VERBOSE;
 
 my ($log_file, $log_fh, $state_file, $state_temp, $state_fh);
 
@@ -100,9 +100,9 @@ while ( @ARGV )
 	shift @ARGV;
     }
     
-    elsif ( $ARGV[0] =~ /^-q|^--quiet$/ )
+    elsif ( $ARGV[0] =~ /^-v|^--verbose$/ )
     {
-	$QUIET = 1;
+	$VERBOSE = 1;
 	shift @ARGV;
     }
     
@@ -148,57 +148,16 @@ push @ARGV, 'all' unless @ARGV;
 
 
 # If any notifications were generated, send them out now. Otherwise, exit
-# silently.
+# silently unless we are running in verbose mode.
 
 if ( @NOTIFICATIONS )
 {
-    # Generate a subject for the notification message. If all of the check
-    # results are OK, the subject will be either 'Notify OK', 'Report OK', or
-    # 'Check OK'. Otherwise, it will contain a list of the abnormal result
-    # codes. 
-    
-    my %conditions;
-    
-    foreach my $n ( @NOTIFICATIONS )
-    {
-	if ( $n =~ /^(\w+)/ )
-	{
-	    $conditions{$1} = 1 unless $1 eq 'OK';
-	}
-    }
-    
-    my $summary = %conditions ? join(', ', keys %conditions) : 'OK';
-    
-    my $action = $CHECK  ? 'Check'
-	       : $REPORT ? 'Report'
-	       :           'Notify';
-    
-    # If the 'sendmail' configuration variable was set, and we are not running
-    # in check mode, send the notifications directly via sendmail.
-    
-    if ( $CONFIG->{sendmail} && ! $CHECK )
-    {
-	my $recipients = $CONFIG->{sendmail};
-	
-	open(my $sendmail, '|-', "sendmail $recipients") or 
-	    die "ERROR: could not run sendmail: $!\n";
-	
-	say $sendmail "From: $CONFIG->{from}" if $CONFIG->{from};
-	say $sendmail "Subject: $action $summary";
-	say $sendmail "";
-	
-	say $sendmail $_ foreach @NOTIFICATIONS;
-	
-	close $sendmail;
-    }
-    
-    # Otherwise, write the notifications to STDOUT.
-    
-    else
-    {
-	say STDOUT "$action $summary";
-	say STDOUT $_ foreach @NOTIFICATIONS;
-    }
+    &SendNotifications;
+}
+
+elsif ( $VERBOSE )
+{
+    say STDERR "No notifications";
 }
 
 exit;
@@ -229,7 +188,7 @@ sub ReadConfigurationFile {
     foreach my $key ( keys $CONFIG->%* )
     {
 	warn "ERROR: invalid key '$key' in $config_file\n"
-	    unless $TOPLEVEL{$key} || $QUIET;
+	    unless $TOPLEVEL{$key};
 	
 	if ( $key eq 'log_dir' && $CONFIG->{$key} )
 	{
@@ -327,6 +286,7 @@ sub PerformStatusChecks {
 	
 	if ( $specification->{url} )
 	{
+	    say STDERR "Performing check '$check_name'" if $VERBOSE;
 	    CheckWebService($check_name, $specification);
 	}
 	
@@ -334,6 +294,7 @@ sub PerformStatusChecks {
 	
 	elsif ( $specification->{limit} )
 	{
+	    say STDERR "Performing check '$check_name'" if $VERBOSE;
 	    CheckDiskSpace($check_name, $specification);
 	}
 	
@@ -342,6 +303,7 @@ sub PerformStatusChecks {
 	
 	elsif ( defined $specification->{cycle} && $specification->{cycle} ne '' )
 	{
+	    say STDERR "Performing check '$check_name'" if $VERBOSE;
 	    CheckTest($check_name, $specification);
 	}
 	
@@ -725,6 +687,75 @@ sub CheckTest {
     {
 	log_message "OK $label";
 	write_state "OK||$label";
+    }
+}
+
+
+# SendNotifications ( )
+# 
+# Send all notifications that have been generated so far.
+
+sub SendNotifications {
+    
+    # Generate a subject for the notification message. If all of the check
+    # results are OK, the subject will be either 'Notify OK', 'Report OK', or
+    # 'Check OK'. Otherwise, it will contain a list of the abnormal result
+    # codes. 
+    
+    my %conditions;
+    
+    foreach my $n ( @NOTIFICATIONS )
+    {
+	if ( $n =~ /^(\w+)/ )
+	{
+	    $conditions{$1} = 1 unless $1 eq 'OK';
+	}
+    }
+    
+    my $summary = %conditions ? join(', ', keys %conditions) : 'OK';
+    
+    my $action = $CHECK  ? 'Check'
+	       : $REPORT ? 'Report'
+	       :           'Notify';
+    
+    my $recipients = $CONFIG->{sendmail};
+	
+    # If we are running in report mode and sendmail_report is also set, use
+    # that instead.
+    
+    if ( $REPORT && $CONFIG->{sendmail_report} )
+    {
+	$recipients = $CONFIG->{sendmail_report};
+    }
+    
+    # If the 'sendmail' configuration variable was set, and we are not running
+    # in check mode, send the notifications directly via sendmail.
+    
+    if ( $recipients && ! $CHECK )
+    {
+	say STDERR "Sending notifications to: $recipients" if $VERBOSE;
+	
+	# Open a pipe to sendmail, and send the notifications.
+	
+	open(my $sendmail, '|-', "sendmail $recipients") or 
+	    die "ERROR: could not run sendmail: $!\n";
+	
+	say $sendmail "From: $CONFIG->{from}" if $CONFIG->{from};
+	say $sendmail "Subject: $action $summary";
+	say $sendmail "";
+	
+	say $sendmail $_ foreach @NOTIFICATIONS;
+	
+	close $sendmail;
+    }
+    
+    # Otherwise, write the notifications to STDOUT.
+    
+    else
+    {
+	say STDOUT "Skipping notification to: $recipients" if $CHECK;
+	say STDOUT "$action $summary";
+	say STDOUT $_ foreach @NOTIFICATIONS;
     }
 }
 
