@@ -47,9 +47,10 @@ my $state_dir;
 
 # Globals
 
-my $REPORT = '';
 my $CHECK;
-my $VERBOSE;
+my $NOTIFY;
+my $REPORT = '';
+my $VERBOSE = '';
 
 my ($log_file, $log_fh, $state_file, $state_temp, $state_fh);
 
@@ -68,11 +69,7 @@ my $curtime = time;
 my $timestamp = scalar(localtime);
 
 
-# Check for options.
-# 
-# The option '-f' or '--file' specifies a configuration file. The default is
-# 'webcheck.yml'. The option '-r' or '--report' or 'report' will cause output to
-# be generated for all selected entries even if the status is an unchanged 'OK'.
+# Check for options. See the help message for a description.
 
 while ( @ARGV )
 {
@@ -88,15 +85,21 @@ while ( @ARGV )
 	shift @ARGV;
     }
     
-    elsif ( $ARGV[0] =~ /^-r$|^--report$/ )
-    {
-	$REPORT = 'REPORT ';
-	shift @ARGV;
-    }
-    
     elsif ( $ARGV[0] =~ /^-c$|^--check$/ )
     {
 	$CHECK = 1;
+	shift @ARGV;
+    }
+    
+    elsif ( $ARGV[0] =~ /^-n$|^--notify$/ )
+    {
+	$NOTIFY = 1;
+	shift @ARGV;
+    }
+    
+    elsif ( $ARGV[0] =~ /^-r$|^--report$/ )
+    {
+	$REPORT = 'REPORT ';
 	shift @ARGV;
     }
     
@@ -127,6 +130,15 @@ while ( @ARGV )
 	last;
     }
 }
+
+
+# The default mode is check, and it is an error to specify both report and
+# notify modes.
+
+die "You cannot specify both --report and --notify\n"
+    if $REPORT && $NOTIFY;
+
+$CHECK = 1 unless $REPORT || $NOTIFY;
 
 
 # Read and validate the configuration file.
@@ -831,44 +843,66 @@ sub ReadState {
     
     my $state_fh;
     
-    # If the file does not exist, create it now. The initial state will be
-    # 'INIT'.
+    # If we are running in notify mode, we must have a state file. If the file
+    # does not exist, create it now. The initial state will be 'INIT'.
     
-    unless ( -e $state_file )
+    if ( $NOTIFY )
     {
-	open($state_fh, ">", $state_file) 
-	    or die "ERROR: cannot create $state_file: $!\n";
+	unless ( -e $state_file )
+	{
+	    open($state_fh, ">", $state_file) 
+		or die "ERROR: cannot create $state_file: $!\n";
+	    
+	    say $state_fh "INIT";
+	    close($state_fh);
+	}
 	
-	say $state_fh "INIT";
-	close($state_fh);
+	# Read and return the contents of the state file. Throw an exception if the
+	# file is not readable or not writable.
+	
+	-w $state_file
+	    or die "ERROR: cannot write $state_file: $!\n";
+	
+	open($state_fh, "<", $state_file) 
+	    or die "ERROR: cannot read $state_file: $!\n";
+	
+	my $state = <$state_fh>;
+	
+	close $state_fh;
+	
+	chomp $state;
+	
+	return $state;
     }
     
-    # Read and return the contents of the state file. Throw an exception if the
-    # file is not readable or not writable.
+    # Otherwise, read the state file if it exists. Return 'INIT' otherwise.
     
-    -w $state_file
-	or die "ERROR: cannot write $state_file: $!\n";
-    
-    open($state_fh, "<", $state_file) 
-	or die "ERROR: cannot read $state_file: $!\n";
-    
-    my $state = <$state_fh>;
-    
-    close $state_fh;
-    
-    chomp $state;
-    
-    return $state;
+    else
+    {
+	my $state;
+	
+	if ( open($state_fh, '<', $state_file) )
+	{
+	    $state = <$state_fh>;
+	    close $state_fh;
+	    chomp $state;
+	}
+	
+	return $state || 'INIT';
+    }
 }
 
 
 # write_state ( new_state )
 # 
-# Write the specified contents to the file $state_file.
+# Write the specified contents to the file $state_file, if we are running in
+# notification mode. If we are running in report mode or check mode, do nothing.
 
 sub write_state {
     
     my ($new_state) = @_;
+    
+    return if $REPORT || $CHECK;
     
     open(my $state_fh, ">", $state_file)
 	or die "ERROR: cannot write $state_file: $!\n";
