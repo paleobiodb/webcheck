@@ -864,11 +864,14 @@ sub ReadState {
 
 # write_state ( new_state )
 # 
-# Write the specified contents to the file $state_file.
+# If we are running in notify mode, Write the specified contents to
+# the file $state_file. If we are in report or check mode, do nothing.
 
 sub write_state {
     
     my ($new_state) = @_;
+    
+    return if $REPORT || $CHECK;
     
     open(my $state_fh, ">", $state_file)
 	or die "ERROR: cannot write $state_file: $!\n";
@@ -1020,17 +1023,20 @@ Description:
 The status checks to be performed are specified by entries in the configuration
 file. The format of this file is given below.
 
-In normal operation mode, each status check result is appended to a log file.
-Output is only generated when the status changes, or when an abnormal condition
-persists. By running under a crontab entry with the MAILTO variable set, this
-output can be sent as a notification to an email inbox or a text-message
-gateway. The generated output is formatted to be useful when received as a text
-message. As long as the status remains normal, no output is generated.
+The default operation mode is 'notify'. In this mode, each status check result
+is appended to a log file. Output is only generated when the status changes, or
+when an abnormal condition persists. By running under a crontab entry with the
+MAILTO variable set, this output can be sent as a notification to an email inbox
+or a text-message gateway. The generated output is formatted to be useful when
+received as a text message. As long as the status remains normal, no output is
+generated.
 
 In report mode (specified by --report) output is generated for each status check
-result even if the status is unchanged. This can be used periodically to test
-that the system is working, in situations where the status of all services
-remains unchanged for long periods of time.
+result even if the status is unchanged. The state is checked but not updated, so
+that the next execution in notify mode will properly notify any changed
+statuses. This mode can be used periodically to test that the system is working,
+in situations where the status of all services remains unchanged for long
+periods of time.
 
 The state of each checked service is stored in a state file. The motivation for
 the state files, and for this program in general, is to provide for quick
