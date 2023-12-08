@@ -39,17 +39,19 @@ my %TOPLEVEL = (checks => 1, log_dir => 1, log_file => 1, state_dir => 1,
 
 # Defaults
 
-my $config_file = 'webcheck.yml';
-my $default_log = 'webcheck.log';
-my $log_dir = '.';
-my $state_dir;
+my $CONFIG_FILE = 'webcheck.yml';
+my $DEFAULT_LOG = 'webcheck.log';
+my $LOG_DIR = '.';
+my $STATE_DIR;
 
 
 # Globals
 
-my $REPORT = '';
 my $CHECK;
-my $VERBOSE;
+my $NOTIFY;
+my $REPORT = '';
+my $SENDMAIL;
+my $TEST;
 
 my ($log_file, $log_fh, $state_file, $state_temp, $state_fh);
 
@@ -70,39 +72,58 @@ my $timestamp = scalar(localtime);
 
 # Check for options.
 # 
-# The option '-f' or '--file' specifies a configuration file. The default is
-# 'webcheck.yml'. The option '-r' or '--report' or 'report' will cause output to
-# be generated for all selected entries even if the status is an unchanged 'OK'.
+# See the help message below for a description of the options.
+
+my $flags = '';
 
 while ( @ARGV )
 {
-    if ( $ARGV[0] =~ /^-f$|--file$/ )
+    if ( $ARGV[0] =~ / ^ - ([cnrst]+) $ /x )
     {
-	shift @ARGV;
-	$config_file = shift @ARGV or die "ERROR: you must specify a configuration file name\n";
-    }
-    
-    elsif ( $ARGV[0] =~ /^--file=(.*)/ )
-    {
-	$config_file = $1 or die "ERROR: you must specify a configuration file name\n";
+	$flags .= $1;
 	shift @ARGV;
     }
     
-    elsif ( $ARGV[0] =~ /^-r$|^--report$/ )
+    if ( $ARGV[0] =~ / ^ - ([cnrst]*) f $ | ^ --file $ /x )
     {
-	$REPORT = 'REPORT ';
+	$flags .= $1; 
+	shift @ARGV;
+	$CONFIG_FILE = shift @ARGV or die "ERROR: you must specify a configuration file name\n";
+    }
+    
+    elsif ( $ARGV[0] =~ / ^ --file=(.*) /x )
+    {
+	$CONFIG_FILE = $1 or die "ERROR: you must specify a configuration file name\n";
 	shift @ARGV;
     }
     
-    elsif ( $ARGV[0] =~ /^-c$|^--check$/ )
+    elsif ( $ARGV[0] =~ / ^ --check $ /x )
     {
-	$CHECK = 1;
+	$flags .= 'c';
 	shift @ARGV;
     }
     
-    elsif ( $ARGV[0] =~ /^-v|^--verbose$/ )
+    elsif ( $ARGV[0] =~ / ^ --notify $ /x )
     {
-	$VERBOSE = 1;
+	$flags .= 'n';
+	shift @ARGV;
+    }
+    
+    elsif ( $ARGV[0] =~ / ^ --report $ /x )
+    {
+	$flags .= 'r';
+	shift @ARGV;
+    }
+    
+    elsif ( $ARGV[0] =~ / ^ --sendmail $ /x )
+    {
+	$flags .= 's';
+	shift @ARGV;
+    }
+    
+    elsif ( $ARGV[0] =~ / ^ --test $ /x )
+    {
+	$flags .= 't';
 	shift @ARGV;
     }
     
@@ -119,7 +140,7 @@ while ( @ARGV )
     
     elsif ( $ARGV[0] =~ /^-/ )
     {
-	die "ERROR: unrecognized option '$ARGV[0]'\n";
+	die "Unrecognized option '$ARGV[0]'\n";
     }
     
     else
@@ -128,12 +149,24 @@ while ( @ARGV )
     }
 }
 
+$CHECK = 1 if $flags =~ /c/;
+$NOTIFY = 1 if $flags =~ /n/;
+$REPORT = 'REPORT ' if $flags =~ /r/;
+$SENDMAIL = 1 if $flags =~ /s/;
+$TEST = 1 if $flags =~ /t/;
+
+die "You may not specify --notify and --report together\n" if $NOTIFY && $REPORT;
+die "You may not specify --notify and --check together\n" if $NOTIFY && $CHECK;
+die "You may not specify --check and --report together\n" if $CHECK && $REPORT;
+
+$CHECK = 1 unless $NOTIFY || $REPORT;
+
 
 # Read and validate the configuration file.
 
 my ($CONFIG, @ALL_CHECKS);
 
-&ReadConfigurationFile($config_file);
+&ReadConfigurationFile($CONFIG_FILE);
 
 
 # Process the remaining arguments, which should specify entries in the
@@ -148,16 +181,11 @@ push @ARGV, 'all' unless @ARGV;
 
 
 # If any notifications were generated, send them out now. Otherwise, exit
-# silently unless we are running in verbose mode.
+# silently unless we are running in test mode.
 
-if ( @NOTIFICATIONS )
+if ( @NOTIFICATIONS || $TEST )
 {
     &SendNotifications;
-}
-
-elsif ( $VERBOSE )
-{
-    say STDERR "No notifications";
 }
 
 exit;
@@ -174,35 +202,35 @@ sub ReadConfigurationFile {
     
     # Read the specified file, or die if an error occurs.
     
-    die "ERROR: could not read $config_file: $!" unless -r $config_file;
+    die "ERROR: could not read $CONFIG_FILE: $!" unless -r $CONFIG_FILE;
     
-    $CONFIG = YAML::Tiny->read($config_file);
+    $CONFIG = YAML::Tiny->read($CONFIG_FILE);
     
     $CONFIG = $CONFIG->[0];
     
     # Validate the file contents.
     
-    die "ERROR: you must have 'checks' as a top-level key in $config_file\n" 
+    die "ERROR: you must have 'checks' as a top-level key in $CONFIG_FILE\n" 
 	unless ref $CONFIG eq 'HASH' && $CONFIG->{checks};
 
     foreach my $key ( keys $CONFIG->%* )
     {
-	warn "ERROR: invalid key '$key' in $config_file\n"
+	warn "ERROR: invalid key '$key' in $CONFIG_FILE\n"
 	    unless $TOPLEVEL{$key};
 	
 	if ( $key eq 'log_dir' && $CONFIG->{$key} )
 	{
-	    $log_dir = $CONFIG->{$key};
+	    $LOG_DIR = $CONFIG->{$key};
 	}
 	
 	elsif ( $key eq 'state_dir' && $CONFIG->{$key} )
 	{
-	    $state_dir = $CONFIG->{$key};
+	    $STATE_DIR = $CONFIG->{$key};
 	}
 	
 	elsif ( $key eq 'log_file' && $CONFIG->{$key} )
 	{
-	    $default_log = $CONFIG->{$key};
+	    $DEFAULT_LOG = $CONFIG->{$key};
 	}
     }
     
@@ -210,8 +238,8 @@ sub ReadConfigurationFile {
     # important that when all checks are carried out, they are always done in
     # the order in which they are listed in the file.
     
-    open(my $ifh, '<', $config_file) or 
-	die "ERROR: could not read $config_file: $!";
+    open(my $ifh, '<', $CONFIG_FILE) or 
+	die "ERROR: could not read $CONFIG_FILE: $!";
     
     while ( my $line = <$ifh> )
     {
@@ -256,7 +284,7 @@ sub PerformStatusChecks {
 	
 	unless ( exists $CONFIG->{checks}{$check_name} )
 	{
-	    die "ERROR: could not find '$check_name' in $config_file\n";
+	    die "ERROR: could not find '$check_name' in $CONFIG_FILE\n";
 	}
 	
 	# If the check exists but is empty, skip it.
@@ -286,7 +314,7 @@ sub PerformStatusChecks {
 	
 	if ( $specification->{url} )
 	{
-	    say STDERR "Performing check '$check_name'" if $VERBOSE;
+	    say STDERR "Performing check '$check_name'" if $TEST;
 	    CheckWebService($check_name, $specification);
 	}
 	
@@ -294,7 +322,7 @@ sub PerformStatusChecks {
 	
 	elsif ( $specification->{limit} )
 	{
-	    say STDERR "Performing check '$check_name'" if $VERBOSE;
+	    say STDERR "Performing check '$check_name'" if $TEST;
 	    CheckDiskSpace($check_name, $specification);
 	}
 	
@@ -303,7 +331,7 @@ sub PerformStatusChecks {
 	
 	elsif ( defined $specification->{cycle} && $specification->{cycle} ne '' )
 	{
-	    say STDERR "Performing check '$check_name'" if $VERBOSE;
+	    say STDERR "Performing check '$check_name'" if $TEST;
 	    CheckTest($check_name, $specification);
 	}
 	
@@ -311,7 +339,7 @@ sub PerformStatusChecks {
 	
 	else
 	{
-	    die "ERROR: could not determine entry type for '$check_name' in $config_file\n";
+	    die "ERROR: could not determine entry type for '$check_name' in $CONFIG_FILE\n";
 	}
     }
     
@@ -338,7 +366,7 @@ sub CheckWebService {
     
     unless ( $check_url && $check_url =~ qr{ ^ \w+ :// [\w.:]+ / .* }xs )
     {
-	die "ERROR: $name: '$check_url' does not look like a URL, in $config_file\n";
+	die "ERROR: $name: '$check_url' does not look like a URL, in $CONFIG_FILE\n";
     }
     
     # If the command string contains '%', replace each instance with the value of
@@ -378,7 +406,7 @@ sub CheckWebService {
     
     # If we are running in check mode, output the result and return.
     
-    if ( $CHECK )
+    if ( $CHECK || $REPORT )
     {
 	if ( $code eq '200' )
 	{
@@ -415,7 +443,7 @@ sub CheckWebService {
     
     if ( $code eq '200' && $pstatus eq 'OK' )
     {
-	output_message "OK $label" if $REPORT;
+	output_message "OK $label" if $REPORT || $CHECK;
 	write_log "OK $label";
 	return;
     }
@@ -467,7 +495,7 @@ sub CheckWebService {
 	# prior code, or if we are running in report mode, or if the count matches
 	# one of the numbers specified by the entry parameter 'followup'.
 	
-	if ( $code ne $pcode || $REPORT || $is_followup )
+	if ( $code ne $pcode || $REPORT || $CHECK || $is_followup )
 	{
 	    output_message $notification;
 	}
@@ -546,17 +574,7 @@ sub CheckDiskSpace {
 	}
     }
     
-    # If we are running in check mode, output the result and return.
-    
-    if ( $CHECK )
-    {
-	output_message "$code $label";
-	output_message $_ foreach @details;
-	return;
-    }
-    
-    # Otherwise, open the correct log file and read the prior state of this
-    # entry.
+    # Open the correct log file and read the prior state of this entry.
     
     SelectLog($name, $params);
     
@@ -587,7 +605,7 @@ sub CheckDiskSpace {
     # reach this branch then the state hasn't changed, so there is no reason to
     # modify the state file.
     
-    elsif ( $REPORT )
+    elsif ( $REPORT || $CHECK )
     {
 	log_message "$code $label";
 	output_message $_ foreach @details;
@@ -621,16 +639,7 @@ sub CheckTest {
     my $cycle = $params->{cycle} > 0 ? $params->{cycle} + 0 : 0;
     my $label = $params->{label} || $name;
     
-    # If we are running in check mode, generate output for a status of CHECK.
-    
-    if ( $CHECK )
-    {
-	output_message "CHECK $label";
-	return;
-    }
-    
-    # Otherwise, open the correct log file and read the prior state of this
-    # entry.
+    # Open the correct log file and read the prior state of this entry.
     
     SelectLog($name, $params);
     
@@ -662,7 +671,7 @@ sub CheckTest {
     
     elsif ( $pstate eq 'OK' )
     {
-	output_message "OK $label" if $REPORT;
+	output_message "OK $label" if $REPORT || $CHECK;
 	write_log "OK $label";
 	return;
     }
@@ -675,7 +684,7 @@ sub CheckTest {
     
     if ( $count <= $cycle )
     {
-	output_message "ERR $count $label" if $REPORT;
+	output_message "ERR $count $label" if $REPORT || $CHECK;
 	write_log "ERR $count $label";
 	write_state "ERR|$count|$label";
     }
@@ -693,7 +702,7 @@ sub CheckTest {
 
 # SendNotifications ( )
 # 
-# Send all notifications that have been generated so far.
+# Send all notifications or reports that have been generated so far.
 
 sub SendNotifications {
     
@@ -718,42 +727,83 @@ sub SendNotifications {
 	       : $REPORT ? 'Report'
 	       :           'Notify';
     
-    my $recipients = $CONFIG->{sendmail};
-	
-    # If we are running in report mode and sendmail_report is also set, use
-    # that instead.
+    # If the 'sendmail' option was given and the 'sendmail' configuration
+    # setting was set, send any notifications or reports directly via sendmail.
+    # But if we are running in test mode, inform the user of the recipient list
+    # and output the notifications directly.
     
-    if ( $REPORT && $CONFIG->{sendmail_report} )
+    if ( $SENDMAIL )
     {
-	$recipients = $CONFIG->{sendmail_report};
-    }
-    
-    # If the 'sendmail' configuration variable was set, and we are not running
-    # in check mode, send the notifications directly via sendmail.
-    
-    if ( $recipients && ! $CHECK )
-    {
-	say STDERR "Sending notifications to: $recipients" if $VERBOSE;
+	my $recipients = $CONFIG->{sendmail};
 	
-	# Open a pipe to sendmail, and send the notifications.
+	# If we are running in report mode and sendmail_report is also defined,
+	# use that instead. Note that it may be empty, in which case report
+	# output will be directed to stdout as normal.
 	
-	open(my $sendmail, '|-', "sendmail $recipients") or 
-	    die "ERROR: could not run sendmail: $!\n";
+	if ( $REPORT && defined $CONFIG->{sendmail_report} )
+	{
+	    $recipients = $CONFIG->{sendmail_report};
+	}
 	
-	say $sendmail "From: $CONFIG->{from}" if $CONFIG->{from};
-	say $sendmail "Subject: $action $summary";
-	say $sendmail "";
+	# Throw an exception if no recipient list was given.
 	
-	say $sendmail $_ foreach @NOTIFICATIONS;
+	die "You must set the configuration variable 'sendmail' in order to use sendmail\n"
+	    unless $recipients;
 	
-	close $sendmail;
+	# If the recipient list is '$ENV{xxx}', then get the recipient from the
+	# environment variable xxx or else throw an exception.
+	
+	if ( $recipients =~ / ^ \$ ENV \{ (\w+) \} /x )
+	{
+	    $recipients = $ENV{$1} or
+		die "You must set the environment variable '$1' in order to use sendmail\n";
+	}
+	
+	elsif ( $recipients =~ /^\$/ )
+	{
+	    die "Invalid value for 'sendmail' in $CONFIG_FILE\n";
+	}
+	
+	# If we are running in test mode, inform the user of where the output
+	# would go and write it directly to STDOUT.
+	
+	if ( $TEST )
+	{
+	    say STDERR "Notifications would be sent to: $recipients";
+	
+	    if ( @NOTIFICATIONS )
+	    {
+		say STDOUT "$action $summary";
+		say STDOUT $_ foreach @NOTIFICATIONS;
+	    }
+	    
+	    else
+	    {
+		say STDERR "No notifications";
+	    }
+	}
+	
+	# Otherwise, open a pipe to sendmail and write the notifications to it.
+	
+	else
+	{
+	    open(my $sendmail, '|-', "sendmail $recipients") or 
+		die "ERROR: could not run sendmail: $!\n";
+	    
+	    say $sendmail "From: $CONFIG->{from}" if $CONFIG->{from};
+	    say $sendmail "Subject: $action $summary";
+	    say $sendmail "";
+	    
+	    say $sendmail $_ foreach @NOTIFICATIONS;
+	    
+	    close $sendmail;
+	}
     }
     
     # Otherwise, write the notifications to STDOUT.
     
     else
     {
-	say STDOUT "Skipping notification to: $recipients" if $CHECK;
 	say STDOUT "$action $summary";
 	say STDOUT $_ foreach @NOTIFICATIONS;
     }
@@ -770,7 +820,7 @@ sub ComputeElapsed {
     
     my ($time, $ptime) = @_;
     
-    return '?' unless $time > 0 && $ptime > 0 && $time > $ptime;
+    return '?' unless $time > 0 && $ptime > 0 && $time >= $ptime;
     
     my $diff = $time - $ptime;
     
@@ -825,14 +875,29 @@ sub ReadState {
     # are located in that directory. Otherwise, they are located in the log
     # directory.
     
-    my $dir = $state_dir || $log_dir;
+    my $dir = $STATE_DIR || $LOG_DIR;
     
     $state_file = resolve_name($filename, $dir);
     
-    my $state_fh;
+    my ($state_fh, $state);
     
-    # If the file does not exist, create it now. The initial state will be
-    # 'INIT'.
+    # If we are running in 'check' mode, read the state file if it exists and is
+    # readable. Otherwise, return 'INIT'.
+    
+    if ( $CHECK )
+    {
+	if ( open $state_fh, '<', $state_file )
+	{
+	    $state = <$state_fh>;
+	    chomp $state;
+	    close $state_fh;
+	}
+	
+	return ($state || 'INIT');
+    }
+    
+    # Otherwise, create the state file if it does not exist. The initial state
+    # will be 'INIT'.
     
     unless ( -e $state_file )
     {
@@ -852,13 +917,11 @@ sub ReadState {
     open($state_fh, "<", $state_file) 
 	or die "ERROR: cannot read $state_file: $!\n";
     
-    my $state = <$state_fh>;
-    
+    $state = <$state_fh>;
     close $state_fh;
-    
     chomp $state;
     
-    return $state;
+    return ($state || 'INIT');
 }
 
 
@@ -872,6 +935,12 @@ sub write_state {
     my ($new_state) = @_;
     
     return if $REPORT || $CHECK;
+    
+    if ( $TEST )
+    {
+	say STDERR "Would write state: $new_state";
+	return;
+    }
     
     open(my $state_fh, ">", $state_file)
 	or die "ERROR: cannot write $state_file: $!\n";
@@ -893,9 +962,11 @@ sub SelectLog {
     
     my ($name, $params) = @_;
     
-    my $filename = $params->{log_file} || $default_log;
+    return if $CHECK || $TEST;
     
-    my $this_log = resolve_name($filename, $log_dir);
+    my $filename = $params->{log_file} || $DEFAULT_LOG;
+    
+    my $this_log = resolve_name($filename, $LOG_DIR);
     
     # If this log is already open, we are done. Otherwise, close the currently
     # open log file if any and open the new one.
@@ -1009,11 +1080,25 @@ Options:
   --file, -f        Use the specified configuration file. The default is
                     ./webcheck.yml.
 
-  --report, -r      Perform the specified checks in the normal way, but report
-                    all results instead of only status changes and followups.
+  --check, -c       Run in check mode. Perform the specified checks without
+                    logging or saving state. Write a report to stdout, 
+                    ignoring any output directives. This is the default
+                    if no other mode is specified.
 
-  --check, -c       Perform the specified checks without logging or saving
-                    state. Report all results.
+  --notify, -n      Run in notify mode. Log all status check results, and
+                    save the status of each entry to its state file. Generate
+                    a notification for each entry whose status has changed, or
+                    when a followup notification is indicated. Direct the output
+                    as indicated in the configuration file.
+
+  --report, -r      Run in report mode. Log all status check results and
+                    generate a report of all results, but do not change
+                    the state files. Direct the output as indicated in the
+                    configuration file.
+
+  --test, -t        Ignore output directives, and do not save state. Write
+                    extra messages to stderr that indicate where output
+                    would otherwise go and what state would be saved.
 
   --help, -h        Print this message.
 
@@ -1023,38 +1108,44 @@ Description:
 The status checks to be performed are specified by entries in the configuration
 file. The format of this file is given below.
 
-The default operation mode is 'notify'. In this mode, each status check result
-is appended to a log file. Output is only generated when the status changes, or
-when an abnormal condition persists. By running under a crontab entry with the
-MAILTO variable set, this output can be sent as a notification to an email inbox
-or a text-message gateway. The generated output is formatted to be useful when
-received as a text message. As long as the status remains normal, no output is
-generated.
+The default operation mode is 'check'. In this mode, the result of each status
+check is written to stdout. No log entries are written, and no state is saved.
 
-In report mode (specified by --report) output is generated for each status check
-result even if the status is unchanged. The state is checked but not updated, so
-that the next execution in notify mode will properly notify any changed
-statuses. This mode can be used periodically to test that the system is working,
-in situations where the status of all services remains unchanged for long
-periods of time.
+In 'notify' mode, each status check result is appended to the log file and the
+status of each entry is saved to its state file. A notification is generated
+when the status changes, or when a followup notification is indicated. If the
+'sendmail' directive appears in the configuration file, all notifications are
+sent as a single message via sendmail. This can be used with email-to-sms
+addresses to notify responsible personnel on their phones when a service is
+down.
 
-The state of each checked service is stored in a state file. The motivation for
-the state files, and for this program in general, is to provide for quick
-notification when the status of a service changes, without flooding the
-responder with notifications if an abnormal condition persists for hours. It is
-recommended to run this program every 10 minutes, or as often as necessary for
-prompt notification of problems. The 'followup' parameter can be used to provide
-additional notifications when an abnormal condition persists.
+In 'report' mode, output is generated for each status check result even if the
+status is unchanged. The state is not updated, on the assumption that periodic
+notifications are being run by a cron job. If the status of any entry has 
+changed, it should be reported by the next execution in notification mode.
+The purpose of this mode is to be used periodically, under a separate cron job,
+to verify that the system is working in situations where the status of all 
+services remains unchanged for long periods of time.
 
-In check mode (specified by --check) output is generated for each status check
-result but nothing is written to the log or to the state files.
+The 'test' flag can be used to check the destination for notification and
+report output, without actually sending any output and without changing the
+state files.
+
+The motivation for the state files, and for this program in general, is to
+provide for quick notification when the status of a service changes, without
+flooding the responder with notifications if an abnormal condition persists for
+hours. It is recommended to run this program every 10 minutes, or as often as
+necessary for prompt notification of problems. The 'followup' parameter can be
+used to provide additional notifications on a specified pattern when an abnormal
+condition persists. For example, "1 25 60" will send a followup notification
+at 10 minutes, 4 hours, and 10 hours if an abnormal condition persists that long.
 
 
 Configuration file:
 
 The configuration file must be in YAML format. The status check entries must
 be listed under the top level key 'checks'. The following top level keys are
-also allowed, with the values interpreted as follows:
+allowed, with the values interpreted as follows:
 
   log_file          The name of the log file, defaults to 'webcheck.log'.
 
@@ -1064,29 +1155,37 @@ also allowed, with the values interpreted as follows:
   state_dir         The directory in which the state files are located,
                     defaults to the value of log_dir.
 
-  sendmail          Send any generated notifications to the specified e-mail
-                    address(es) directly using sendmail. If this setting is
-                    specified, then no output is produced. However, when
-                    running in check mode, this setting is ignored and standard
-                    output is produced instead.
+  sendmail          Send any generated notifications and/or reports to the
+                    specified e-mail address(es) directly using sendmail. If
+                    this setting is specified, then nothing is written to
+                    stdout. It is ignored in check mode and test mode.
 
-  from              Sets the 'From' header if used along with 'sendmail'. It
-                    can be set to any valid e-mail address. Note that the
+  sendmail_report   Provide an alternate email recipient list for reports.
+
+  from              Sets the 'From' header when used along with 'sendmail'. The
+                    value can be any valid e-mail address. Note that the
                     envelope sender is unaffected.
 
   url_command       The command to be used for checking remote services.
-                    It should contain a '%' character, which will be
+                    It should contain the string '%%', which will be
                     substituted with the url for each entry. The default
-                    is "curl --head --silent '%'".
+                    is "curl --head --silent '%%'".
 
   url_followup      The value must be a list of numbers. For example, if
-                    the value is '2 10', if an abnormal condition persists
-                    for two or more executions of this program, a followup
-                    notification will be sent on the 2nd and 10th executions.
+                    the value is '1 10', followup notifications will be sent
+                    on the 2nd and 11th executions if an abnormal condition
+                    persists that long.
 
-  
-Three types of entries are allowed. Any values specified in an entry override
+  checks            All status check entries must occur as keys under this.
+                    The name of each entry is its key.
+
+Four types of entries are allowed. Any values specified in an entry override
 the corresponding top level values for that entry only.
+
+Group
+
+  An entry with a string value represents a group of other entries. The
+  value must be a list of entry names separated by spaces.
 
 Remote service check
 
@@ -1116,7 +1215,7 @@ Disk space check
   defaults to 'df', and the output is scanned for volumes whose use% meets or
   exceeds the specified threshold. The following keys are accepted:
 
-  limit             The threshold for notification of use%
+  limit             The threshold for notification of use% (mandatory)
 
   limit_/var        The threshold for notification of a particular volume,
                     in this case /var.
@@ -1139,7 +1238,7 @@ Test entry
   cycle             If the value is greater than zero, the result will cycle
                     from 'OK' to 'ERR', and will repeat for that number of
                     executions before returning to 'OK'. If the value is zero,
-                    the result will be 'OK' on every execution.
+                    the result will be 'OK' on every execution. (mandatory)
 
   label             A label string used for generating output, defaults
                     to the entry name.

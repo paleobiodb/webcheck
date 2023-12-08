@@ -1,4 +1,6 @@
 
+sendmail: $ENV{WEBCHECK_RECIPIENT}
+
 log_dir: logs
 
 checks:
