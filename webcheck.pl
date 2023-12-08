@@ -1080,11 +1080,6 @@ Options:
   --file, -f        Use the specified configuration file. The default is
                     ./webcheck.yml.
 
-  --check, -c       Run in check mode. Perform the specified checks without
-                    logging or saving state. Write a report to stdout, 
-                    ignoring any output directives. This is the default
-                    if no other mode is specified.
-
   --notify, -n      Run in notify mode. Log all status check results, and
                     save the status of each entry to its state file. Generate
                     a notification for each entry whose status has changed, or
@@ -1096,7 +1091,11 @@ Options:
                     the state files. Direct the output as indicated in the
                     configuration file.
 
-  --test, -t        Ignore output directives, and do not save state. Write
+  --sendmail, -s    Direct all output to sendmail instead of stdout. The
+                    recipient list is given by the configuration setting
+                    'sendmail' or 'sendmail_report'.
+
+  --test, -t        Write all output to stdout, and do not save state. Write
                     extra messages to stderr that indicate where output
                     would otherwise go and what state would be saved.
 
@@ -1155,12 +1154,14 @@ allowed, with the values interpreted as follows:
   state_dir         The directory in which the state files are located,
                     defaults to the value of log_dir.
 
-  sendmail          Send any generated notifications and/or reports to the
-                    specified e-mail address(es) directly using sendmail. If
-                    this setting is specified, then nothing is written to
-                    stdout. It is ignored in check mode and test mode.
+  sendmail          When the 'sendmail' option is specified on the command line,
+                    send any generated notifications and/or reports to the
+                    specified e-mail address(es) directly using sendmail.
+                    Multiple addresses should be separated by commas. If the
+                    value has the form '$ENV{xxx}', the address list is read
+                    from the environment variable xxx.
 
-  sendmail_report   Provide an alternate email recipient list for reports.
+  sendmail_report   Specifies an alternate email recipient list for reports.
 
   from              Sets the 'From' header when used along with 'sendmail'. The
                     value can be any valid e-mail address. Note that the
