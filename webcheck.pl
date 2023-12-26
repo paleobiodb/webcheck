@@ -604,7 +604,7 @@ sub CheckDiskSpace {
     # are running in report mode or check mode. Update the state file only if we
     # are running in notify mode.
     
-    if ( $summary ne $psummary || $REPORT || $CHECK )
+    if ( $summary ne $psummary || $code ne $pstatus || $REPORT || $CHECK )
     {
 	if ( $ptime )
 	{
@@ -622,7 +622,7 @@ sub CheckDiskSpace {
 	
 	if ( $NOTIFY )
 	{
-	    my $newtime = $code eq $pstatus ? $ptime : $curtime;	    
+	    my $newtime = $code eq $pstatus && $ptime > 0 ? $ptime : $curtime;	    
 	    write_state "$code|$newtime|$summary|$label";
 	}
     }
