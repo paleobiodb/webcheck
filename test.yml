@@ -1,18 +1,17 @@
 
-sendmail: $ENV{WEBCHECK_RECIPIENT}
+recipients: $ENV{RECIPIENTS}
 
 log_dir: logs
 
 checks:
   dftest:
-    command: cat dftest.data
+    df_command: cat dftest.data
     limit: 95
     limit_/var: 90
     ignore: ^tmpfs|^udev|^/dev/loop
   
   urltest:
-    command: cat urltest.data
-    url: http://ignore/
+    url_command: cat urltest.data
     followup: 1 6
     log_file: urltest.log
   
