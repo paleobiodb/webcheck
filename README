@@ -1,0 +1,11 @@
+This software is intended for the purpose of notifying responsible
+personnel when a web service goes down or when a server's disk
+fills up.
+
+It is written in Perl and installed using Module::Build. To install
+this software, execute the following commands:
+
+perl Build.PL
+./Build test
+./Build install
+

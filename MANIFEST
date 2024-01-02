@@ -1,0 +1,22 @@
+Build.PL
+MANIFEST			This list of files
+README
+script/webcheck
+t/01-script.t
+t/02-test.t
+t/03-errors.t
+t/04-url.t
+t/05-diskspace.t
+t/06-sendmail.t
+t/badconfig.yml
+t/dftest.full
+t/dftest.good
+t/dftest.more
+t/dftest.most
+t/dftest.warn
+t/sendmail_test.pl
+t/test.yml
+t/urltest.bad
+t/urltest.good
+t/urltest.noresp
+t/webcheck.yml

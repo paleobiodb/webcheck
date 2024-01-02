@@ -1,0 +1,15 @@
+
+log_file: test.log
+
+checks:
+  test1:
+    cycle: 0
+
+  test2:
+    cycle: 0
+
+  test4:
+    cycle: 0
+    
+  test3:
+    cycle: 0

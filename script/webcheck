@@ -28,7 +28,10 @@ use strict;
 use feature 'say';
 no warnings 'uninitialized';
 
+use Pod::Usage;
 use YAML::Tiny;
+
+our ($VERSION) = '1.0';
 
 
 # Files and directories, with defaults
@@ -130,7 +133,13 @@ while ( @ARGV )
     
     elsif ( $ARGV[0] =~ /^-h$|^--help$/ )
     {
-	&help_message;
+	pod2usage(-exitval => 0, -verbose => 0);
+	exit;
+    }
+    
+    elsif ( $ARGV[0] =~ /^-m$|^--man$/ )
+    {
+	pod2usage(-exitval => 0, -verbose => 2);
 	exit;
     }
     
@@ -204,7 +213,7 @@ sub ReadConfigurationFile {
     
     # Read the specified file, or die if an error occurs.
     
-    die "ERROR: could not read $CONFIG_FILE: $!" unless -r $CONFIG_FILE;
+    die "ERROR: could not read $CONFIG_FILE: $!\n" unless -r $CONFIG_FILE;
     
     $CONFIG = YAML::Tiny->read($CONFIG_FILE);
     
@@ -212,9 +221,6 @@ sub ReadConfigurationFile {
     
     # Validate the file contents.
     
-    die "ERROR: you must have 'checks' as a top-level key in $CONFIG_FILE\n" 
-	unless ref $CONFIG eq 'HASH' && $CONFIG->{checks};
-
     foreach my $key ( keys $CONFIG->%* )
     {
 	warn "WARNING: invalid key '$key' in $CONFIG_FILE\n"
@@ -236,6 +242,9 @@ sub ReadConfigurationFile {
 	}
     }
     
+    die "ERROR: you must have 'checks' as a top-level key in $CONFIG_FILE\n" 
+	unless ref $CONFIG eq 'HASH' && $CONFIG->{checks};
+
     # Now read the raw file contents, and grab the indented entry names in
     # order. It is important that the checks are always done in the same order
     # so that the notification output will be consistent. The YAML::Tiny module
@@ -243,7 +252,7 @@ sub ReadConfigurationFile {
     # use this hack instead.
     
     open(my $ifh, '<', $CONFIG_FILE) or 
-	die "ERROR: could not read $CONFIG_FILE: $!";
+	die "ERROR: could not read $CONFIG_FILE: $!\n";
     
     while ( my $line = <$ifh> )
     {
@@ -757,13 +766,13 @@ sub SendOutput {
 	die "ERROR: you must set the configuration variable 'recipients' in order to use sendmail\n"
 	    unless $recipients;
 	
-	# If the recipient list is '$ENV{xxx}', then get the recipient from the
+	# If the recipient list is '$xxx', then get the recipient from the
 	# environment variable xxx or else throw an exception.
 	
-	if ( $recipients =~ / ^ \$ ENV \{ (\w+) \} /x )
+	if ( $recipients =~ / ^ \$ (\w+) $ /x )
 	{
 	    $recipients = $ENV{$1} or
-		die "ERROR: you must set the environment variable '$1' in order to use recipients\n";
+		die "ERROR: you must set the environment variable '$1'\n";
 	}
 	
 	elsif ( $recipients =~ /^\$/ )
@@ -776,8 +785,10 @@ sub SendOutput {
 	
 	if ( $TEST )
 	{
-	    say STDERR "Output would be sent via sendmail\nTo: $recipients";
-	
+	    say STDERR "Output would be sent via sendmail";
+	    say STDERR "To: $recipients";
+	    say STDERR "From: $CONFIG->{from}" if $CONFIG->{from};
+	    
 	    if ( @OUTPUT )
 	    {
 		say STDOUT "$action $summary";
@@ -821,9 +832,10 @@ sub SendOutput {
 # ComputeElapsed ( time, prevtime )
 # 
 # Return a string giving the difference between the first argument and the
-# second in seconds (s) if less than 60, or in minutes (m) if less than 3600,
-# in hours (h) if less than 86400, or in days. Any time that is 5 minutes or
-# less before the start of an hour or day is rounded up.
+# second in seconds (s) if less than 60, or in minutes (m) if less than 3600, in
+# hours (h) if less than 259200, or in days. Any time that is 5 seconds or less
+# before the start of a minute or 5 minutes or less before the start of an hour
+# or day is rounded up.
 
 sub ComputeElapsed {
     
@@ -833,18 +845,18 @@ sub ComputeElapsed {
     
     my $diff = $time - $ptime;
     
-    if ( $diff < 60 )
+    if ( $diff < 55 )
     {
 	return "${diff}s";
     }
     
     elsif ( $diff < 3300 )
     {
-	my $min = int($diff/60);
+	my $min = int($diff+5/60);
 	return "${min}m";
     }
     
-    elsif ( $diff < 86100 )
+    elsif ( $diff < 258900 )
     {
 	my $hrs = int(($diff+300)/3600);
 	return "${hrs}h";
@@ -1056,213 +1068,336 @@ sub resolve_name {
 }
 
 
+__END__
 
-# help_message ( )
-# 
-# Print out a help message and exit.
+=head1 NAME
 
-sub help_message {
+webcheck - check the health of local or remote services
+
+=head1 SYNOPSIS
+
+  webcheck [options] [arguments]
+
+This program is intended to be run as a cron job, in order to notify responsible
+personnel when a server is down or is having problems. If one or more arguments
+are provided, they cause the corresponding status checks from the configuration
+file to be performed. With no arguments, all configured status checks are
+performed.
+
+  Options:
+    -f         Use the specified configuration file.
+    -n         Run in 'notify' mode.
+    -r         Run in 'report' mode.
+    -t         Run in 'test' mode.
+    -s         Direct output to sendmail.
+    -h         Print help message.
+    -m         Print full documentation.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-f, --file>
+
+Use the specified configuration file. The default is ./webcheck.yml.
+
+=item B<-n, --notify>
+
+Run in 'notify' mode. Log all status check results, and save the status
+of each entry in its state file. Generate output for each entry whose
+status has changed, or when a followup notification is indicated.
+
+=item B<-r, --report>
+
+Run in 'report' mode. Log all status check results, and generate output
+for each entry including those whose status is unchanged. Do not alter
+the state files.
+
+=item B<-s, --sendmail>
+
+Direct all output to sendmail instead of stdout. The recipient list
+is given by the configuration setting 'recipients' or 'recipients_report'.
+
+=item B<-t, --test>
+
+Write all output to stdout. Do not send output to sendmail, even if the sendmail
+option is also given. Do not alter the state files. Write extra messages to
+STDERR that indicate where output would otherwise go and what state would
+otherwise be saved.
+
+=item B<-h, --help>
+
+Print a brief help message.
+
+=item B<-m, --man>
+
+Print this documentation.
+
+=back
+
+Single-letter options may be bundled.
+
+=head1 DESCRIPTION
+
+The status checks to be performed are specified by entries in a configuration file.
+The format of this file is given in the next section.
+
+The default operation mode is 'check'. In this mode, the result of each status check is
+written to stdout. No log entries are written, and no state is saved. This mode can be
+used at any time to check the status of the configured services.
+
+In 'notify' mode, each status check result is appended to the log file and the status of
+each entry is saved to its state file. A notification message is generated when any of
+the statuses change, or when a followup notification is indicated. This program is
+intended to be run in notify mode as a cron job every 10 minutes, or as frequently as
+necessary for prompt notification of outages. The 'sendmail' option can be used to send
+these notifications via the sendmail program. This can be used with email-to-sms
+addresses to notify responsible personnel on their phones when a service is down, and/or
+to regular e-mail addresses. Alternatively, the cron variable MAILTO can be used for the
+same purpose albeit with less flexibility.
+
+In 'report' mode, output is generated for each status check result even if the status is
+unchanged. The state files are not updated, but all results are written to the log file.
+This program can be run in report mode periodically, perhaps once every few days, to
+provide output on a regular basis during times when no outages are detected for long
+periods. Otherwise, if something were to prevent this program from running, i.e. an
+unexpected change to the crontab file, the people who are supposed to be notified would
+not have any easy way to find out. But if the report output does not appear as expected,
+that would mean something is wrong.
+
+The 'test' flag can be used to check the destination for notification and report output,
+without actually sending any output and without changing the state files.
+
+The motivation for the state files, and for this program in general, is to
+provide for quick notification when the status of a service changes, without
+flooding the responder with notifications if an abnormal condition persists for
+hours. It is recommended to run this program every 10 minutes, or as often as
+necessary for prompt notification of problems. The 'followup' setting can be
+used to provide additional notifications on a specified pattern when an abnormal
+condition persists. For example, "1 24 60" will send a followup notification
+at 10 minutes, 4 hours, and 10 hours if an abnormal condition persists that long.
+
+=head1 CONFIGURATION FILE
+
+The configuration file must be in YAML format. The status check entries must be listed
+under the top level key 'checks'. The following top level keys are allowed, with the
+values interpreted as follows:
+
+=over 4
+
+=item B<log_file>
+
+The name of the log file, defaults to 'webcheck.log'.
+
+=item B<log_dir>
+
+The directory in which the log file is located, defaults to '.'
+
+=item B<state_dir>
+
+The directory in which the state files are located, defaults to the value of
+log_dir.
+
+=item B<recipients>
+
+When the 'sendmail' option is specified on the command line, send any generated
+output to the specified e-mail address(es) directly using sendmail. Multiple
+addresses should be separated by commas. If the value has the form '$ENV{xxx}',
+the address list is read from the environment variable xxx.
+
+=item B<recipients_report>
+
+Specifies an alternate email recipient list for report mode.
+
+=item B<from>
+
+Sets the 'From' header when used along with 'recipients'. The value can be any
+valid e-mail address.
+
+=item B<url_command>
+
+The command to be used for checking remote services. It should contain the
+string '%%', which will be substituted with the url for each entry. The default
+is "curl --head --silent '%%'".
+
+=item B<url_followup>
+
+The value must be a list of numbers. For example, if the value is C<'1 6'>,
+followup notifications will be sent on the 2nd and 7th times that an abnormal
+condition is detected if it persists that long. If the notification interval is
+10 minutes, this would cause followup notifications to be sent at 10 minutes and
+1 hour.
+
+=item B<checks>
+
+All status check entries must occur as keys under this. The name of each entry
+is its key.
+
+=back
+
+=head2 STATUS CHECK ENTRIES
+
+Three types of entries are allowed, plus one more type used only in build tests.
+Any values specified in an entry override the corresponding top level values for
+that entry only.
+
+=head3 Group
+
+An entry with a string value represents a group of other entries. The
+value must be a list of entry names separated by spaces. When the group
+name is given as a command-line argument, all of the specified checks are
+executed.
+
+=head3 Remote service check
+
+An entry of this type must include the key 'url' or 'url_command'. The specified
+command is used to fetch the specified URL, and the response is checked for the
+standard http response. A response code of 200 is considered normal, anything else is
+abnormal. The following keys are accepted:
+
+=over 4
+
+=item B<url>
+
+The url to be checked. This is required if the url command contains the '%%'
+replacement token.
+
+=item B<url_command>
+
+A command to be executed for this entry only.
+
+=item B<url_followup>
+
+A followup pattern for this entry only.
+
+=item B<label>
+
+A label string used for generating output, defaults to the entry name.
+
+=item B<log_file>
+
+Log this entry to the specified file instead of to the main one.
+
+=item B<state_file>
+
+Save the state to the specified file. Default is C<nnn_state.txt>, where nnn is
+the name of the entry.
+
+=back
+
+=head3 Disk space check
+
+An entry of this type must include the key 'limit'. The command to be run
+defaults to 'df', and the output is scanned for volumes whose use% meets or
+exceeds the specified threshold. The following keys are accepted:
+
+=over 4
+
+=item B<limit>
+
+The threshold for notification of use% (required).
+
+=item B<limit_/var>
+
+The threshold for notification of a particular volume, in this case /var.
+
+=item B<df_command>
+
+A command to be executed, defaults to 'df'.
+
+=item B<ignore>
+
+A regexp used to filter the command result. All lines that match it will be
+ignored. These would typically include temporary file systems, snaps, etc.
+
+=item B<label>
+
+A label string used for generating output, defaults to the entry name.
+
+=item B<log_file>
+
+Log this entry to the specified file instead of to the main one.
+
+=item B<state_file>
+
+Save the state to the specified file. Default is C<nnn_state.txt>, where nnn is
+the name of the entry.
+
+=back
+
+=head1 EXAMPLE
+
+Here is an example configuration file:
+
+  log_dir: logs
+  url_command: curl -m 15 --head --silent '%%'
+  url_followup: 1 24 60 120 180 240 300 360 420 480
+  
+  recipients: my.address@myservice.com, 608-123-4567@sms.gateway
+  from: wc@myservice.com
+  
+  checks:
+    main:
+      url: https://myservice.com/
+      label: website
     
-    my $command = 'webcheck';
-    
-    if ( $0 =~ qr{ ([^/]+) $ }x )
-    {
-	$command = $1;
-    }
-    
-    my $message = <<END_HELP;
+    api:
+      url: https://dev.myservice.com/api/v1/
+      label: api
 
-Name:
+This configuration defines two different checks. If this file is placed in your
+home directory as I<webcheck.yml> and you create a sub-directory called I<logs>,
+you could then execute it via a crontab line as follows:
 
-  webcheck - check the health of local or remote services
+  0,10,20,30,40,50 * * * * webcheck -sn all
 
-Usage:
+The C<-sn> flags tell webcheck to run in notify mode and send the output to the
+specified recipient list via sendmail. Alternatively, you could also do it as
+follows:
 
-  $command [options] [arguments]
+  MAILTO=my.address@myservice.com, 608-123-4567@sms.gateway
+  0,10,20,30,40,50 * * * * webcheck -n all
 
-  This program is intended to be run as a cron job, in order to notify responsible
-  personnel when a server is down or is having problems. If arguments are provided, they
-  cause the corresponding status checks from the configuration file to be performed. With
-  no arguments, all configured status checks are performed.
+You will get an initial notification
+message whose output looks like the following:
 
-Options:
+  Notify OK
+  website OK
+  api OK
 
-    --file, -f      Use the specified configuration file. The default is ./webcheck.yml.
+As long as both of the specified URLs continue to return HTTP 200 responses, you
+will not get any more messages. If at some point, for example, the api URL becomes
+non-responsive, you will get the following message:
 
-    --notify, -n    Run in 'notify' mode. Log all status check results, and save the status
-                    of each entry in its state file. Generate output for each entry whose
-                    status has changed, or when a followup notification is indicated.
+  Notify DOWN
+  api DOWN (NOR)
 
-    --report, -r    Run in 'report' mode. Log all status check results, and generate output
-                    for each entry including those whose status is unchanged. Do not alter
-                    the state files.
+After 10 minutes, according to the followup notification pattern, you will get
+the following message:
 
-    --sendmail, -s  Direct all output to sendmail instead of stdout. The recipient list
-                    is given by the configuration setting 'recipients' or 'recipients_report'.
+  Notify DOWN
+  api DOWN 10m (NOR)
 
-    --test, -t      Write all output to stdout, ignoring 'recipients' or other directives.
-                    Do not alter the state files. Write extra messages to STDERR that
-                    indicate where output would otherwise go and what state would
-                    otherwise be saved.
+Continuing our example, if the service again returns a proper response at the
+40 minute mark, you will get:
+  
+  Notify OK
+  api OK 40m
 
-    --help, -h      Print this message.
+If at any point you want to check the status of the services directly, you can
+use the following command:
 
-  Single-letter options may be bundled.
+  cd; webcheck
 
-Description:
+or
 
-  The status checks to be performed are specified by entries in the configuration file.
-  The format of this file is given below.
+  webcheck -f ~/.webcheck
 
-  The default operation mode is 'check'. In this mode, the result of each status check is
-  written to stdout. No log entries are written, and no state is saved. This mode can be
-  used at any time to check the status of the configured services.
+The following files will be created in the I<logs> subdirectory:
 
-  In 'notify' mode, each status check result is appended to the log file and the status of
-  each entry is saved to its state file. A notification message is generated when any of
-  the statuses change, or when a followup notification is indicated. This program is
-  intended to be run in notify mode as a cron job every 10 minutes, or as frequently as
-  necessary for prompt notification of outages. The 'sendmail' option can be used to send
-  these notifications via the sendmail program. This can be used with email-to-sms
-  addresses to notify responsible personnel on their phones when a service is down, and/or
-  to regular e-mail addresses. Alternatively, the cron variable MAILTO can be used for the
-  same purpose albeit with less flexibility.
+  webcheck.log
+  main_state.txt
+  api_state.txt
 
-  In 'report' mode, output is generated for each status check result even if the status is
-  unchanged. The state files are not updated, but all results are written to the log file.
-  This program can be run in report mode periodically, perhaps once every few days, to
-  provide output on a regular basis during times when no outages are detected for long
-  periods. Otherwise, if something were to prevent this program from running, i.e. an
-  unexpected change to the crontab file, the people who are supposed to be notified would
-  not have any easy way to find out. But if the report output does not appear as expected,
-  that would mean something is wrong.
-
-  The 'test' flag can be used to check the destination for notification and report output,
-  without actually sending any output and without changing the state files.
-
-  The motivation for the state files, and for this program in general, is to
-  provide for quick notification when the status of a service changes, without
-  flooding the responder with notifications if an abnormal condition persists for
-  hours. It is recommended to run this program every 10 minutes, or as often as
-  necessary for prompt notification of problems. The 'followup' setting can be
-  used to provide additional notifications on a specified pattern when an abnormal
-  condition persists. For example, "1 24 60" will send a followup notification
-  at 10 minutes, 4 hours, and 10 hours if an abnormal condition persists that long.
-
-Configuration file:
-
-  The configuration file must be in YAML format. The status check entries must be listed
-  under the top level key 'checks'. The following top level keys are allowed, with the
-  values interpreted as follows:
-
-    log_file            The name of the log file, defaults to 'webcheck.log'.
-
-    log_dir             The directory in which the log file is located, defaults to '.'
-
-    state_dir           The directory in which the state files are located,
-                        defaults to the value of log_dir.
-
-    recipients          When the 'sendmail' option is specified on the command line,
-		        send any generated output to the specified e-mail address(es)
-		        directly using sendmail. Multiple addresses should be separated by
-		        commas. If the value has the form '\$ENV{xxx}', the address list
-		        is read from the environment variable xxx.
-
-    recipients_report   Specifies an alternate email recipient list for report mode.
-
-    from                Sets the 'From' header when used along with 'recipients'. The
-		        value can be any valid e-mail address.
-
-    url_command         The command to be used for checking remote services.
-		        It should contain the string '%%', which will be
-		        substituted with the url for each entry. The default
-		        is "curl --head --silent '%%'".
-
-    url_followup        The value must be a list of numbers. For example, if the value is
-		        '1 6', followup notifications will be sent on the 2nd and 7th
-		        times that an abnormal condition is detected if it persists that
-		        long. If the notification interval is 10 minutes, this would cause
-		        followup notifications to be sent at 10 minutes and 1 hour.
-
-    checks              All status check entries must occur as keys under this.
-		        The name of each entry is its key.
-
-  Four types of entries are allowed. Any values specified in an entry override
-  the corresponding top level values for that entry only.
-
-  Group
-
-    An entry with a string value represents a group of other entries. The
-    value must be a list of entry names separated by spaces.
-
-  Remote service check
-
-    An entry of this type must include the key 'url' or 'url_command'. The specified
-    command is used to fetch the specified URL, and the response is checked for the
-    standard http response. A response code of 200 is considered normal, anything else is
-    abnormal. The following keys are accepted:
-
-    url               The url to be checked
-
-    url_command       A command to be executed for this entry only
-
-    url_followup      A followup pattern for this entry only
-
-    label             A label string used for generating output, defaults to the
-		      entry name.
-
-    log_file          Log this entry to the specified file instead of to the main one.
-
-    state_file        Save the state to the specified file. Default is nnn_state.txt,
-                      where nnn is the name of the entry.
-
-  Disk space check
-
-    An entry of this type must include the key 'limit'. The command to be run
-    defaults to 'df', and the output is scanned for volumes whose use% meets or
-    exceeds the specified threshold. The following keys are accepted:
-
-    limit             The threshold for notification of use% (mandatory)
-
-    limit_/var        The threshold for notification of a particular volume,
-		      in this case /var.
-
-    df_command        A command to be executed, defaults to 'df'.
-
-    ignore            A regexp used for filtering the command result. All lines that
-                      match it will be ignored. These would typically include temporary
-                      file systems, snaps, etc.
-
-    label             A label string used for generating output, defaults
-		      to the entry name.
-
-    log_file          Log this entry to the specified file instead of to the main
-		      one.
-
-    state_file        Save the state to the specified file. Default is
-		      <entry name>_state.txt.
-
-  Test entry
-
-    An entry of this type must include the key 'cycle'.
-
-    cycle             If the value is greater than zero, the result will cycle
-		      from 'OK' to 'ERR', and will repeat for that number of
-		      executions before returning to 'OK'. If the value is zero,
-		      the result will be 'OK' on every execution. (mandatory)
-
-    label             A label string used for generating output, defaults
-		      to the entry name.
-
-    log_file          Log this entry to the specified file instead of to the main
-		      one.
-
-    state_file        Save the state to the specified file. Default is
-		      <entry name>_state.txt.
-
-END_HELP
-    
-    print $message;
-}
-
+=cut
 

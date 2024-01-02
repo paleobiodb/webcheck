@@ -1,0 +1,12 @@
+Filesystem                         1K-blocks     Used Available Use% Mounted on
+udev                                 4021644        0   4021644   0% /dev
+tmpfs                                 813616     1612    812004   1% /run
+/dev/mapper/Volume00-root            5322752  4099608    943480  82% /
+tmpfs                                4068076        0   4068076   0% /dev/shm
+tmpfs                                   5120        0      5120   0% /run/lock
+tmpfs                                4068076        0   4068076  98% /sys/fs/cgroup
+/dev/mapper/Volume00-var            30929632 22127468   7508680  72% /var
+/dev/mapper/Volume00-home            2387288  2086864    166736  93% /home
+/dev/sda1                             942940   213676    664088  25% /boot
+/dev/loop1                             94080    94080         0 100% /snap/lxd/24061
+/dev/loop0                             65024    65024         0 100% /snap/core20/1974
