@@ -805,10 +805,13 @@ sub SendOutput {
 	
 	else
 	{
-	    open(my $sendmail, '|-', "sendmail $recipients") or 
+	    my $from = '';
+	    $from = "-f $CONFIG->{from}" if $CONFIG->{from};
+	    
+	    open(my $sendmail, '|-', "sendmail $from $recipients") or 
 		die "ERROR: could not run sendmail: $!\n";
 	    
-	    say $sendmail "From: $CONFIG->{from}" if $CONFIG->{from};
+	    # say $sendmail "From: $CONFIG->{from}" if $CONFIG->{from};
 	    say $sendmail "Subject: $action $summary";
 	    say $sendmail "";
 	    
