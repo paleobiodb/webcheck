@@ -27,7 +27,7 @@ subtest 'notify ok' => sub {
     
     my $result = `script/webcheck -nf t/test.yml urltest 2>&1`;
     
-    my $check = $result =~ /^Notify OK[\n\r]+OK test service[\n\r]+$/s;
+    my $check = $result =~ /^Notify OK test service[\n\r]+OK test service[\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -73,7 +73,7 @@ subtest 'notify down' => sub {
     
     my $result = `script/webcheck -nf t/test.yml urltest 2>&1`;
     
-    my $check = $result =~ /^Notify DOWN[\n\r]+DOWN test service [(]504[)][\n\r]+$/s;
+    my $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN test service [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -93,7 +93,7 @@ subtest 'followups' => sub {
     
     my $result = `script/webcheck -nf t/test.yml urltest 2>&1`;
     
-    my $check = $result =~ /^Notify DOWN[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
+    my $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -101,7 +101,7 @@ subtest 'followups' => sub {
     
     $result = `script/webcheck -rf t/test.yml urltest 2>&1`;
     
-    $check = $result =~ /^Report DOWN[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
+    $check = $result =~ /^Report DOWN test service[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -115,7 +115,7 @@ subtest 'followups' => sub {
     
     $result = `script/webcheck --report -f t/test.yml urltest 2>&1`;
     
-    $check = $result =~ /^Report DOWN[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
+    $check = $result =~ /^Report DOWN test service[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -123,7 +123,7 @@ subtest 'followups' => sub {
     
     $result = `script/webcheck -nf t/test.yml urltest 2>&1`;
     
-    $check = $result =~ /^Notify DOWN[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
+    $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -147,7 +147,7 @@ subtest 'no response' => sub {
     
     my $result = `script/webcheck -nf t/test.yml urltest 2>&1`;
     
-    my $check = $result =~ /^Notify DOWN[\n\r]+DOWN test service [12]s [(]NOR[)][\n\r]+$/s;
+    my $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN test service [12]s [(]NOR[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     

@@ -6,11 +6,28 @@ from: wc@myservice.com
 log_dir: logs
 
 checks:
+  systest:
+    label: system
+    sysinfo_command: cat systest.data
+    mem_limit: 75
+    mem_critical: 95
+    mem_lower: 50
+    swap_limit: 50
+    swap_critical: 95
+    swap_lower: 25
+    load_limit: 2
+    load_critical: 4
+    load_lower: 1
+    procs_limit: 500
+    procs_critical: 600
+    procs_lower: 450
+  
   dftest:
     label: diskspace
     df_command: cat dftest.data
     limit: 95
     limit_/var: 90
+    lower_/var: 85
     ignore: ^tmpfs|^udev|^/dev/loop
   
   urltest:

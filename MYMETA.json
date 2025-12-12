@@ -1,0 +1,38 @@
+{
+   "abstract" : "check the health of local or remote services",
+   "author" : [
+      "unknown"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Module::Build version 0.4234",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : 2
+   },
+   "name" : "webcheck",
+   "prereqs" : {
+      "runtime" : {
+         "requires" : {
+            "Pod::Usage" : "1",
+            "YAML::Tiny" : "1",
+            "perl" : "v5.10.1"
+         }
+      },
+      "test" : {
+         "requires" : {
+            "Test::More" : "1"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "license" : [
+         "http://dev.perl.org/licenses/"
+      ]
+   },
+   "version" : "1.0",
+   "x_serialization_backend" : "JSON::PP version 4.16"
+}
