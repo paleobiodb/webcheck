@@ -1248,7 +1248,7 @@ sub ComputeElapsed {
     
     elsif ( $diff < 3300 )
     {
-	my $min = int($diff+5/60);
+	my $min = int(($diff+5)/60);
 	return "${min}m";
     }
     
