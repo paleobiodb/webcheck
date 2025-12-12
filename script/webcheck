@@ -902,13 +902,13 @@ sub CheckSystemStatus {
     if ( $response =~ m{ \btotal\b .* \bfree\b .* \bused\b }xmi &&
 	 $response =~ m{ \bmem \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
     {
-	$stat{mem} = int($3 / $1 * 1000) / 10;
+	$stat{mem} = ($1 > 0) ? int($3 / $1 * 1000) / 10 : 0;
     }
 
     elsif ( $response =~ m{ \btotal\b .* \bused\b .* \bfree\b }xmi &&
 	    $response =~ m{ \bmem \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
     {
-	$stat{mem} = int($2 / $1 * 1000) / 10;
+	$stat{mem} = ($1 > 0) ? int($2 / $1 * 1000) / 10 : 0;
     }
     
     # If the command is 'landscape-sysinfo', only a used percentage is given.
@@ -946,13 +946,13 @@ sub CheckSystemStatus {
 	if ( $response =~ m{ \btotal\b .* \bfree\b .* \bused\b }xmi &&
 	     $response =~ m{ \bswap \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
 	{
-	    $stat{swap} = int($3 / $1 * 1000) / 10;
+	    $stat{swap} = ($1 > 0) ? int($3 / $1 * 1000) / 10 : 0;
 	}
 	
 	elsif ( $response =~ m{ \btotal\b .* \bused\b .* \bfree\b }xmi &&
 		$response =~ m{ \bswap \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
 	{
-	    $stat{swap} = int($2 / $1 * 1000) / 10;
+	    $stat{swap} = ($1 > 0) ? int($2 / $1 * 1000) / 10 : 0;
 	}
 	
 	# If the command is 'landscape-sysinfo', only a used percentage is given.
