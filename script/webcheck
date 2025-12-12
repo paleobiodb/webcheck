@@ -762,7 +762,8 @@ sub CheckSystemStatus {
     # Look up the parameters relevant to this entry.
     
     my $command = $params->{sysinfo_command} || $CONFIG->{sysinfo_command} ||
-	'landscape-sysinfo --sysinfo-plugins=Load,Memory,Processes';
+	die "ERROR: you must specify a command to execute with 'sysinfo_command'\n";
+    
     $limit{load} = $params->{load_limit};
     $lower{load} = $params->{load_lower};
     $critical{load} = $params->{load_critical};
@@ -775,47 +776,74 @@ sub CheckSystemStatus {
     $limit{procs} = $params->{procs_limit};
     $lower{procs} = $params->{procs_lower};
     $critical{procs} = $params->{procs_critical};
+    
     my $label = $params->{label} || $name;
     my $subject = $params->{subject} || $label;
     
-    die "ERROR: $name: invalid value '$limit{load}' for 'load_limit'\n"
-	if $limit{load} && ! $limit{load} > 0;
+    die "ERROR: $name: invalid value '$limit{load}' for 'load_limit', must be a positive number\n"
+	if defined $limit{load} && ! $limit{load} > 0;
     
-    die "ERROR: $name: invalid value '$limit{mem}' for 'mem_limit'\n"
-	if $limit{mem} && ! ($limit{mem} > 0 && $limit{mem} <= 100);
+    die "ERROR: $name: invalid value '$limit{mem}' for 'mem_limit' must be a number 1-100\n"
+	if defined $limit{mem} && ! ($limit{mem} > 0 && $limit{mem} <= 100);
     
     die "ERROR: $name: invalid value '$limit{swap}' for 'swap_limit'\n"
-	if $limit{swap} && ! ($limit{swap} > 0 && $limit{swap} <= 100);
+	if defined $limit{swap} && ! ($limit{swap} > 0 && $limit{swap} =~ /^[\d.]+[GM]?$/);
     
     die "ERROR: $name: invalid value '$limit{procs}' for 'procs_limit'\n"
-	if $limit{procs} && ! $limit{procs} > 0;
+	if defined $limit{procs} && ! $limit{procs} > 0;
     
     die "ERROR: $name: invalid value '$critical{load}' for 'load_critical'\n"
-	if $critical{load} && ! $critical{load} > 0;
+	if defined $critical{load} && ! $critical{load} > 0;
     
     die "ERROR: $name: invalid value '$critical{mem}' for 'mem_critical'\n"
-	if $critical{mem} && ! ($critical{mem} > 0 && $critical{mem} <= 100);
+	if defined $critical{mem} && ! ($critical{mem} > 0 && $critical{mem} <= 100);
     
     die "ERROR: $name: invalid value '$critical{swap}' for 'swap_critical'\n"
-	if $critical{swap} && ! ($critical{swap} > 0 && $critical{swap} <= 100);
+	if defined $critical{swap} && ! ($critical{swap} > 0 && $critical{swap} =~ /^[\d.]+[GM]?$/);
     
     die "ERROR: $name: invalid value '$critical{procs}' for 'procs_critical'\n"
-	if $critical{procs} && ! $critical{procs} > 0;
+	if defined $critical{procs} && ! $critical{procs} > 0;
     
     die "ERROR: $name: invalid value '$lower{load}' for 'load_lower'\n"
-	if $lower{load} && ! $lower{load} > 0;
+	if defined $lower{load} && ! $lower{load} > 0;
     
     die "ERROR: $name: invalid value '$lower{mem}' for 'mem_lower'\n"
-	if $lower{mem} && ! ($lower{mem} > 0 && $lower{mem} <= 100);
+	if defined $lower{mem} && ! ($lower{mem} > 0 && $lower{mem} <= 100);
     
     die "ERROR: $name: invalid value '$lower{swap}' for 'swap_lower'\n"
-	if $lower{swap} && ! ($lower{swap} > 0 && $lower{swap} <= 100);
+	if defined $lower{swap} && ! ($lower{swap} > 0 && $lower{swap} =~ /^[\d.]+[GM]?$/);
     
     die "ERROR: $name: invalid value '$lower{procs}' for 'procs_lower'\n"
-	if $lower{procs} && ! $lower{procs} > 0;
+	if defined $lower{procs} && ! $lower{procs} > 0;
     
-    # Run the indicated command, which will typically be `landscape-sysinfo` or else
-    # `uptime; free`.
+    my ($swap_absolute);
+    
+    if ( $limit{swap} =~ /[GM]/ || $critical{swap} =~ /[GM]/ || $lower{swap} =~ /[GM]/ )
+    {
+	$swap_absolute = 1;
+	die "ERROR: swap limits must all be expressed absolutely if one of them is\n"
+	    if defined $limit{swap} && $limit{swap} !~ /[GM]/ ||
+	    defined $critical{swap} && $critical{swap} !~ /[GM]/ ||
+	    defined $lower{swap} && $lower{swap} !~ /[GM]/;
+	
+	foreach my $hash ( \%limit, \%critical, \%lower )
+	{
+	    if ( $hash->{swap} =~ /(.*)([GM])/ )
+	    {
+		if ( $1 eq 'M' )
+		{
+		    $hash->{swap} = $1 * 1;
+		}
+		
+		else
+		{
+		    $hash->{swap} = $1 * 1024;
+		}
+	    }
+	}
+    }
+    
+    # Run the indicated command.
     
     my ($response, $code, %stat, %over_limit, @details, @output);
     
@@ -849,35 +877,108 @@ sub CheckSystemStatus {
     
     # Parse the output, looking for indications that the system status is dangerous.
     
-    if ( $response =~ m{ (?:system \s load|load \s average) : \s+ ([\d.]+) }xi )
+    # a) Look for load average.
+    
+    # If the command is 'top' or 'uptime', use the 5-minute load average.
+    
+    if ( $response =~ m{ \bload \s average : \s+ \d[\d.]* .*? (\d[\d.]*) }xmi )
     {
 	$stat{load} = $1;
     }
     
-    if ( $response =~ m{ memory \s usage : \s+ ([\d.]+) }xi )
+    # If the command is 'landscape-sysinfo', only one load average is given.
+    
+    elsif ( $response =~ m{ \bsystem \s load : \s+ ([\d.]+) }xmi )
+    {
+	$stat{load} = $1;
+    }
+    
+    # b) Look for memory usage.
+    
+    # If the command is 'top' or 'free', the stats may come in different orders. We
+    # don't care what units the report is using, because we only care about the ratio of
+    # used to total.
+    
+    if ( $response =~ m{ \btotal\b .* \bfree\b .* \bused\b }xmi &&
+	 $response =~ m{ \bmem \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
+    {
+	$stat{mem} = int($3 / $1 * 1000) / 10;
+    }
+
+    elsif ( $response =~ m{ \btotal\b .* \bused\b .* \bfree\b }xmi &&
+	    $response =~ m{ \bmem \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
+    {
+	$stat{mem} = int($2 / $1 * 1000) / 10;
+    }
+    
+    # If the command is 'landscape-sysinfo', only a used percentage is given.
+    
+    elsif ( $response =~ m{ memory \s usage : \s+ ([\d.]+)% }xmi )
     {
 	$stat{mem} = $1;
     }
     
-    if ( $response =~ m{ swap \s usage : \s+ ([\d.]+) }xi )
+    # c) Look for swap usage.
+    
+    # For absolute swap, assume megabytes. So use appropriate options when specifying
+    # the command. This option is incompatible with 'landscape-sysinfo'.
+    
+    if ( $swap_absolute )
     {
-	$stat{swap} = $1;
+	if ( $response =~ m{ \btotal\b .* \bfree\b .* \bused\b }xmi &&
+	     $response =~ m{ \bswap \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
+	{
+	    $stat{swap} = $3;
+	}
+	
+	elsif ( $response =~ m{ \btotal\b .* \bused\b .* \bfree\b }xmi &&
+		$response =~ m{ \bswap \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
+	{
+	    $stat{swap} = $2;
+	}
+    }
+    
+    # For swap percentage, we don't care about the units because we are reporting the
+    # ratio of used to total.
+    
+    else
+    {
+	if ( $response =~ m{ \btotal\b .* \bfree\b .* \bused\b }xmi &&
+	     $response =~ m{ \bswap \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
+	{
+	    $stat{swap} = int($3 / $1 * 1000) / 10;
+	}
+	
+	elsif ( $response =~ m{ \btotal\b .* \bused\b .* \bfree\b }xmi &&
+		$response =~ m{ \bswap \s* : \s+ (\d[\d.]*) .*? (\d[\d.]*) .*? (\d[\d.]*) }xmi )
+	{
+	    $stat{swap} = int($2 / $1 * 1000) / 10;
+	}
+	
+	# If the command is 'landscape-sysinfo', only a used percentage is given.
+	
+	elsif ( $response =~ m{ swap \s usage : \s+ ([\d.]+)% }xmi )
+	{
+	    $stat{swap} = $1;
+	}
+    }
+    
+    # d) Look for number of processes.
+    
+    # If the command is 'top'.
+    
+    if ( $response =~ m{ tasks : \s+ (\d+) }xmi )
+    {
+	$stat{procs} = $1;
     }
 
-    if ( $response =~ m{ processes : \s+ ([\d.]+) }xi )
+    # If the command is 'landscape-sysinfo'.
+    
+    elsif ( $response =~ m{ processes : \s+ ([\d.]+) }xmi )
     {
 	$stat{procs} = $1;
     }
     
-    if ( $response =~ m{ mem : \s+ ([\d.]+) \s+ ([\d.]+) \s+ ([\d.]+) }xi )
-    {
-	$stat{mem} = ($2 / $1 * 100);
-    }
-    
-    if ( $response =~ m{ swap : \s+ ([\d.]+) \s+ ([\d.]+) \s+ ([\d.]+) }xi )
-    {
-	$stat{swap} = ($2 / $1 * 100);
-    }
     
     # Now iterate through the statistics and generate the summary details and output lines.
     
@@ -1652,8 +1753,7 @@ The command to use for disk space checks. The default is 'df'.
 
 =item B<sysinfo_command>
 
-The command to use for system status checks. The default is
-'landscape-sysinfo --sysinfo-plugins=Load,Memory,Processes'.
+The command to use for system status checks. There is no default.
 
 =item B<checks>
 
@@ -1746,9 +1846,12 @@ return to 'OK'.
 =head3 System status check
 
 An entry of this type must include one of the following keys: 'load_limit', 'mem_limit',
-'swap_limit', or 'procs_limit'. The command to be run defaults to 'landscape-sysinfo',
-and the output is scanned for values that exceed the specified limits. The following
-keys are accepted, and the values must be numbers between 1-100.
+'swap_limit', or 'procs_limit'. The command to be run must be specified, since the
+available commands and parameters vary from system to system. The output is scanned for
+values that exceed the specified limits, and the developer has the goal of accepting as
+many different output formats as possible. The following keys are accepted, and the
+values must be numbers between 1-100. For the 'mem' and 'swap' parameters, the values
+may also be any number followed by 'M' or 'G' to indicate absolute sizes in MiB or GiB.
 
 =over 4
 
