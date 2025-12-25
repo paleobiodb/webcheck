@@ -41,7 +41,11 @@ subtest 'notify 1' => sub {
     
     my $result = `script/webcheck -f t/test.yml --notify test 2>&1`;
     
-    my $check = $result =~ /^Notify OK[\n\r]+OK test A[\n\r]+OK test B[\n\r]+$/s;
+    my $check = $result eq <<END_CHECK;
+Notify OK test A, test B
+OK test A
+OK test B
+END_CHECK
     
     print STDERR $result unless $check;
     
@@ -83,7 +87,10 @@ subtest 'notify 2' => sub {
     
     my $result = `script/webcheck -nf t/test.yml test 2>&1`;
     
-    my $check = $result =~ /^Notify ERR[\n\r]+ERR 1 test B[\n\r]+$/s;
+    my $check = $result eq <<END_CHECK;
+Notify ERR test B
+ERR 1 test B
+END_CHECK
     
     print STDERR $result unless $check;
     
@@ -99,7 +106,11 @@ subtest 'notify 3 + report' => sub {
     
     $result = `script/webcheck -rf t/test.yml test 2>&1`;
     
-    my $check = $result =~ /^Report ERR[\n\r]+OK test A[\n\r]+ERR 3 test B[\n\r]+$/s;
+    my $check = $result eq <<END_CHECK;
+Report ERR test B; OK test A
+OK test A
+ERR 3 test B
+END_CHECK
     
     print STDERR $result unless $check;
     
@@ -107,7 +118,11 @@ subtest 'notify 3 + report' => sub {
     
     $result = `script/webcheck -f t/test.yml --report test 2>&1`;
     
-    $check = $result =~ /^Report ERR[\n\r]+OK test A[\n\r]+ERR 3 test B[\n\r]+$/s;
+    $check = $result eq <<END_CHECK;
+Report ERR test B; OK test A
+OK test A
+ERR 3 test B
+END_CHECK
     
     print STDERR $result unless $check;
     
@@ -119,7 +134,11 @@ subtest 'check + notify 4' => sub {
     
     my $result = `script/webcheck -f t/test.yml test 2>&1`;
     
-    my $check = $result =~ /^Check ERR[\n\r]+OK test A[\n\r]+ERR 3 test B[\n\r]+$/s;
+    my $check = $result eq <<END_CHECK;
+Check ERR test B; OK test A
+OK test A
+ERR 3 test B
+END_CHECK
     
     print STDERR $result unless $check;
     

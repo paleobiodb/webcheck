@@ -7,7 +7,8 @@ t/02-test.t
 t/03-errors.t
 t/04-url.t
 t/05-diskspace.t
-t/06-sendmail.t
+t/06-system.t
+t/07-sendmail.t
 t/badconfig.yml
 t/dftest.full
 t/dftest.good
@@ -15,6 +16,13 @@ t/dftest.more
 t/dftest.most
 t/dftest.warn
 t/sendmail_test.pl
+t/systest.critical
+t/systest.decreasing
+t/systest.good
+t/systest.higher
+t/systest.lower
+t/systest.warn
+t/systest.warn2
 t/test.yml
 t/urltest.bad
 t/urltest.good

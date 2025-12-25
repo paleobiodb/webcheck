@@ -26,7 +26,13 @@ ok($check, 'webcheck executes successfully') ||
 
 $result = `cd t; ../script/webcheck 2>&1`;
 
-$check = $result =~ /^Check OK[\n\r]+OK test1[\n\r]+OK test2[\n\r]+OK test4[\n\r]+OK test3[\n\r]+$/s;
+$check = $result eq <<END_CHECK;
+Check OK test1, test2, test4, test3
+OK test1
+OK test2
+OK test4
+OK test3
+END_CHECK
 
 unless ( $check )
 {

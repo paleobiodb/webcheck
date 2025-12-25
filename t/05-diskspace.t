@@ -3,7 +3,7 @@
 
 use strict;
 
-use Test::More tests => 11;
+use Test::More tests => 12;
 
 subtest 'setup' => sub {
     
@@ -27,7 +27,7 @@ subtest 'notify ok' => sub {
     
     my $result = `script/webcheck -nf t/test.yml dftest 2>&1`;
     
-    my $check = $result =~ /^Notify OK[\n\r]+OK diskspace[\n\r]+$/s;
+    my $check = $result =~ /^Notify OK diskspace[\n\r]+OK diskspace[\n\r]+$/;
     
     print STDERR $result unless $check;
     
@@ -71,7 +71,7 @@ subtest 'notify warn' => sub {
     
     my $result = `script/webcheck -nf t/test.yml dftest 2>&1`;
     
-    my $check = $result =~ /^Notify WARN[\n\r]+WARN \ds diskspace[\n\r]+\/var \* 90[\n\r]+$/s;
+    my $check = $result =~ /^Notify WARN diskspace[\n\r]+WARN \ds diskspace[\n\r]+[*] \/var 90 [*][\n\r]+$/;
     
     print STDERR $result unless $check;
     
@@ -98,7 +98,7 @@ subtest 'notify more' => sub {
     
     my $result = `script/webcheck -nf t/test.yml dftest 2>&1`;
     
-    my $check = $result =~ /^Notify WARN[\n\r]+WARN \ds diskspace[\n\r]+\/var \* 97[\n\r]+$/s;
+    my $check = $result =~ /^Notify WARN diskspace[\n\r]+WARN \ds diskspace[\n\r]+[*] \/var 97 [*][\n\r]+$/;
     
     print STDERR $result unless $check;
     
@@ -123,7 +123,7 @@ subtest 'notify most' => sub {
     
     my $result = `script/webcheck -nf t/test.yml dftest 2>&1`;
     
-    my $check = $result =~ /^Notify WARN[\n\r]+WARN \ds diskspace[\n\r]+\/var \* 98[\n\r]+\/home \* 95$/s;
+    my $check = $result =~ /^Notify WARN diskspace[\n\r]+WARN \ds diskspace[\n\r]+[*] \/var 98 [*][\n\r]+[*] \/home 95 [*][\n\r]+$/;
     
     print STDERR $result unless $check;
     
@@ -141,11 +141,25 @@ subtest 'notify most' => sub {
 };
 
 
+subtest 'notify decrease' => sub {
+
+    unlink 'dftest.data';
+    symlink 't/dftest.more', 'dftest.data';
+    
+    my $result = `script/webcheck -nf t/test.yml dftest 2>&1`;
+    
+    is($result, '', 'notify produced empty output');
+};
+
+
 subtest 'check' => sub {
+    
+    unlink 'dftest.data';
+    symlink 't/dftest.most', 'dftest.data';
     
     my $result = `script/webcheck -f t/test.yml dftest 2>&1`;
     
-    my $check = $result =~ /^Check WARN[\n\r]+WARN \ds diskspace[\n\r]+\/ 82[\n\r]+\/var \* 98[\n\r]+\/home \* 95[\n\r]+\/boot 25[\n\r]+$/s;
+    my $check = $result =~ /^Check WARN diskspace[\n\r]+WARN \ds diskspace[\n\r]+\/ 82[\n\r]+[*] \/var 98 [*][\n\r]+[*] \/home 95 [*][\n\r]+\/boot 25[\n\r]+$/;
     
     print STDERR $result unless $check;
     
@@ -163,7 +177,7 @@ subtest 'report' => sub {
     
     my $result = `script/webcheck -rf t/test.yml dftest 2>&1`;
     
-    my $check = $result =~ /^Report WARN[\n\r]+WARN \ds diskspace[\n\r]+\/ 82[\n\r]+\/var \* 98[\n\r]+\/home \* 95[\n\r]+\/boot 25[\n\r]+$/s;
+    my $check = $result =~ /^Report WARN diskspace[\n\r]+WARN \ds diskspace[\n\r]+\/ 82[\n\r]+[*] \/var 98 [*][\n\r]+[*] \/home 95 [*][\n\r]+\/boot 25[\n\r]+$/;
     
     print STDERR $result unless $check;
     
@@ -184,7 +198,7 @@ subtest 'notify full' => sub {
     
     my $result = `script/webcheck -nf t/test.yml dftest 2>&1`;
     
-    my $check = $result =~ /^Notify FULL[\n\r]+FULL \ds diskspace[\n\r]+\/var \* 98[\n\r]+\/home \*\*\* 100$/s;
+    my $check = $result =~ /^Notify FULL diskspace[\n\r]+FULL \ds diskspace[\n\r]+[*] \/var 98 [*][\n\r]+[*]{3} \/home 100 [*]{3}[\n\r]+$/;
     
     print STDERR $result unless $check;
     
