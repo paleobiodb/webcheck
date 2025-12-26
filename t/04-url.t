@@ -3,7 +3,7 @@
 
 use strict;
 
-use Test::More tests => 8;
+use Test::More tests => 9;
 
 subtest 'setup' => sub {
     
@@ -61,6 +61,18 @@ subtest 'state file' => sub {
     
     like($result, qr/ ^ OK [|] \d+ [|] 0 [|] 200 [|] test \s service $ /xs,
 	 'state file content');
+};
+
+
+subtest 'cookie' => sub {
+
+    my $result = `script/webcheck -rf t/test2.yml urltest 2>&1`;
+
+    my $check = $result =~ /^Report OK/;
+
+    print STDERR $result unless $check;
+    
+    ok($check, 'cookie arguemnt ok');
 };
 
 

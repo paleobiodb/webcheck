@@ -385,23 +385,29 @@ sub CheckWebService {
     
     # Look up the parameters relevant to this entry.
     
-    my $command = $params->{url_command} || $CONFIG->{url_command} || "curl --head --silent '%%'";
+    my $command = $params->{url_command} || $CONFIG->{url_command} || "curl --head --silent '%u'";
     my $followup = $params->{url_followup} || $CONFIG->{url_followup} || '';
     my $check_url = $params->{url};
     my $label = $params->{label} || $name;
     my $subject = $params->{subject} || $label;
+    my $cookie_arg = $params->{cookie} ? "-b $params->{cookie}" : '';
     
-    # If the command string contains '%', replace each instance with the value of
-    # $check_url.
+    # In the command string, replace each instance of %u with the value of
+    # $check_url and each instance of %c with the value of $cookie_arg.
     
-    if ( $command =~ /%%/ )
+    if ( $command =~ /%u/ )
     {
 	unless ( $check_url && $check_url =~ qr{ ^ \w+ :// [\w.:]+ / .* }xs )
 	{
 	    die "ERROR: $name: '$check_url' does not look like a URL, in $CONFIG_FILE\n";
 	}
 	
-	$command =~ s/%%/$check_url/g;
+	$command =~ s/%u/$check_url/g;
+    }
+    
+    if ( $command =~ /%c/ )
+    {
+	$command =~ s/%c/$cookie_arg/g;
     }
     
     # Use the indicated command to fetch the specified page. If we don't get a
@@ -1739,11 +1745,16 @@ Specifies an alternate email recipient list for report mode.
 Sets the 'From' header when used along with 'recipients'. The value can be any
 valid e-mail address.
 
+=item B<envelope_from>
+
+If this setting is specified, sendmail will be invoked with the '-f' flag followed
+by the setting value.
+
 =item B<url_command>
 
 The command to be used for checking remote services. It should contain the
-string '%%', which will be substituted with the url for each entry. The default
-is "curl --head --silent '%%'".
+string '%u', which will be substituted with the url for each entry. The default
+is "curl --head --silent '%u'".
 
 =item B<url_followup>
 
@@ -1791,7 +1802,7 @@ abnormal. The following keys are accepted:
 
 =item B<url>
 
-The url to be checked. This is required if the url command contains the '%%'
+The url to be checked. This is required if the url command contains the '%u'
 replacement token.
 
 =item B<url_command>
@@ -1801,6 +1812,12 @@ A command to be executed for this entry only.
 =item B<url_followup>
 
 A followup pattern for this entry only.
+
+=item B<cookie>
+
+A cookie to be passed to the server, i.e. "TEST=1". If the url command contains '%c',
+that token will be replaced by (in this case) the string "-b TEST=1". Admittedly, this
+will only be useful if the base command is 'curl'.
 
 =back
 
@@ -1925,7 +1942,7 @@ the name of the entry. Each status check is required to have a unique state file
 Here is an example configuration file:
 
   log_dir: logs
-  url_command: curl -m 15 --head --silent '%%'
+  url_command: curl -m 15 --head --silent '%u'
   url_followup: 1 24 60 120 180 240 300 360 420 480
   
   recipients: me@mydomain.com, 608-123-4567@sms.gateway

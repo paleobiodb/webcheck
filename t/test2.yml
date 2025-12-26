@@ -6,6 +6,13 @@ envelope_from: wc@myservice.com
 log_dir: logs
 
 checks:
+  
   test1:
     label: test A
     cycle: 0
+  
+  urltest:
+    label: test cookie
+    url_command: t/testcommand.pl %c
+    cookie: TEST=1
+
