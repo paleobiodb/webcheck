@@ -1,0 +1,11 @@
+
+recipients: $RECIPIENTS
+
+envelope_from: wc@myservice.com
+
+log_dir: logs
+
+checks:
+  test1:
+    label: test A
+    cycle: 0

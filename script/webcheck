@@ -64,7 +64,7 @@ sub WriteLog;
 sub WriteState;
 
 my %TOPLEVEL = (checks => 1, log_dir => 1, log_file => 1, state_dir => 1,
-		recipients => 1, recipients_report => 1, from => 1,
+		recipients => 1, recipients_report => 1, from => 1, envelope_from => 1,
 		url_command => 1, url_followup => 1, 
 		df_command => 1, df_limit => 1,	sysinfo_command => 1);
 
@@ -1282,7 +1282,8 @@ sub SendOutput {
 	
 	if ( $TEST )
 	{
-	    say STDERR "Output would be sent via sendmail";
+	    my $flag = $CONFIG->{envelope_from} ? " -f $CONFIG->{envelope_from}" : '';
+	    say STDERR "Output would be sent via sendmail$flag";
 	    say STDERR "To: $recipients";
 	    say STDERR "From: $CONFIG->{from}" if $CONFIG->{from};
 	    
@@ -1298,17 +1299,19 @@ sub SendOutput {
 	    }
 	}
 	
-	# Otherwise, open a pipe to sendmail and write the output to it.
+	# Otherwise, open a pipe to sendmail and write the output to it. If the
+	# setting 'envelope_from' has a non-empty value, use the sendmail -f flag.
+	# If the setting 'from' has a non-empty value, include a 'From:' header.
 	
 	else
 	{
 	    my $from = '';
-	    $from = "-f $CONFIG->{from}" if $CONFIG->{from};
+	    $from = "-f $CONFIG->{envelope_from}" if $CONFIG->{envelope_from};
 	    
 	    open(my $sendmail, '|-', "sendmail $from $recipients") or 
 		die "ERROR: could not run sendmail: $!\n";
 	    
-	    # say $sendmail "From: $CONFIG->{from}" if $CONFIG->{from};
+	    say $sendmail "From: $CONFIG->{from}" if $CONFIG->{from};
 	    say $sendmail "Subject: $action $summary";
 	    say $sendmail "";
 	    

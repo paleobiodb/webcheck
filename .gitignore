@@ -2,3 +2,6 @@
 logs
 _build
 blib
+Build
+MYMETA.yml
+MYMETA.json

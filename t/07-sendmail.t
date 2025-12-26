@@ -5,7 +5,7 @@ use strict;
 
 use feature 'say';
 
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 subtest 'setup' => sub {
     
@@ -69,6 +69,26 @@ subtest 'with recipients' => sub {
     
     say STDERR "*** If you want to test webcheck with sendmail for real, run t/sendmail_test.pl"
 	if $check1 && $check2 && $check3;
+};
+
+
+subtest 'with -f' => sub {
+
+    $ENV{RECIPIENTS} = 'test.email@myservice.com';
+    
+    my $result = `script/webcheck -tf t/test2.yml --sendmail test1 2>&1`;
+    
+    my $check1 = $result =~ /^Output.*-f wc\@myservice.com/m;
+
+    my $check2 = $result =~ /^To: test.email\@myservice.com/m;
+    
+    my $check3 = $result !~ /^From:/m;
+
+    print STDERR $result unless $check1 && $check2 && $check3;
+
+    ok($check1, 'envelope from');
+    ok($check2, 'to address');
+    ok($check3, 'no from header');
 };
 
 
