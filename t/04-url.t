@@ -3,7 +3,7 @@
 
 use strict;
 
-use Test::More tests => 9;
+use Test::More tests => 10;
 
 subtest 'setup' => sub {
     
@@ -66,6 +66,8 @@ subtest 'state file' => sub {
 
 subtest 'cookie' => sub {
 
+    # This tests the %c substitution into the URL command.
+    
     my $result = `script/webcheck -rf t/test2.yml urltest 2>&1`;
 
     my $check = $result =~ /^Report OK/;
@@ -175,6 +177,20 @@ subtest 'no response' => sub {
     # This tests that a change of status does not reset the followup count.
     
     is($result, '', 'additional notification produces empty');
+};
+
+
+subtest 'real site' => sub {
+
+    # Check the status of github.com, which is an HTTP/2 site.
+    
+    my $result = `script/webcheck -rf t/test.yml urltest2 2>&1`;
+
+    my $check = $result =~ /^Report OK real service/s;
+
+    print STDERR ($result || 'EMPTY_RESULT') unless $check;
+    
+    ok($check, 'github.com is ok');
 };
 
 

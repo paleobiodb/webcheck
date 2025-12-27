@@ -14,5 +14,6 @@ checks:
   urltest:
     label: test cookie
     url_command: t/testcommand.pl %c
+    cookie_pattern: -b '%c'
     cookie: TEST=1
 

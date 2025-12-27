@@ -385,19 +385,21 @@ sub CheckWebService {
     
     # Look up the parameters relevant to this entry.
     
-    my $command = $params->{url_command} || $CONFIG->{url_command} || "curl --head --silent '%u'";
+    my $command = $params->{url_command} || $CONFIG->{url_command} || "curl --head --silent %c '%u'";
     my $followup = $params->{url_followup} || $CONFIG->{url_followup} || '';
     my $check_url = $params->{url};
     my $label = $params->{label} || $name;
     my $subject = $params->{subject} || $label;
-    my $cookie_arg = $params->{cookie} ? "-b $params->{cookie}" : '';
+    my $cookie = $params->{cookie};
+    my $cookie_pattern = $params->{cookie_pattern} || $CONFIG->{cookie_pattern} || "-b '%c'";
     
-    # In the command string, replace each instance of %u with the value of
-    # $check_url and each instance of %c with the value of $cookie_arg.
+    # In the command string, replace each instance of %u with the value of $check_url.
+    # Throw an exception if the value of $check_url doesn't look like either a URL or a
+    # host name.
     
     if ( $command =~ /%u/ )
     {
-	unless ( $check_url && $check_url =~ qr{ ^ \w+ :// [\w.:]+ / .* }xs )
+	unless ( $check_url && $check_url =~ qr{ ^ \w+ :// [\w.:-]+ / .* | ^ [\w-]+ (?: [.] [\w-]+)+ $ }xs )
 	{
 	    die "ERROR: $name: '$check_url' does not look like a URL, in $CONFIG_FILE\n";
 	}
@@ -405,9 +407,23 @@ sub CheckWebService {
 	$command =~ s/%u/$check_url/g;
     }
     
+    # In the command string, replace each instance of %c with the value of
+    # $cookie_pattern. Before doing that, replace each instance of %c in the value of
+    # $cookie_pattern with the value of %cookie. If $cookie_pattern is empty, directly
+    # replace each instance of %c in the command string with the value of $cookie.
+    
     if ( $command =~ /%c/ )
     {
-	$command =~ s/%c/$cookie_arg/g;
+	if ( defined $params->{cookie} )
+	{
+	    $cookie_pattern =~ s/%c/$params->{cookie}/g;
+	    $command =~ s/%c/$cookie_pattern/g;
+	}
+	
+	else
+	{
+	    $command =~ s/%c//g;
+	}
     }
     
     # Use the indicated command to fetch the specified page. If we don't get a
@@ -427,7 +443,7 @@ sub CheckWebService {
 	$code = 'EXC';
     }
     
-    elsif ( $response =~ qr{ ^ HTTP/\d[.]\d \s+ (\d+) }xsi )
+    elsif ( $response =~ qr{ ^ HTTP/\d(?:[.]\d)? \s+ (\d+) }xsi )
     {
 	$code = $1;
     }
@@ -1747,14 +1763,16 @@ valid e-mail address.
 
 =item B<envelope_from>
 
-If this setting is specified, sendmail will be invoked with the '-f' flag followed
+If this setting is specified, sendmail will be invoked with the C<-f> flag followed
 by the setting value.
 
 =item B<url_command>
 
-The command to be used for checking remote services. It should contain the
-string '%u', which will be substituted with the url for each entry. The default
-is "curl --head --silent '%u'".
+The command to be used for checking web services. It should contain the string C<%u>.
+For each web service entry, this token will be replaced by the url specified for that
+entry. The command may also contain the string C<%c>. For each entry, this token will be
+replaced by the cookie pattern if the 'cookie' setting has a non-empty value, and by the
+empty string otherwise. The default command is C<curl --head --silent %c '%u'>.
 
 =item B<url_followup>
 
@@ -1763,6 +1781,13 @@ followup notifications will be sent on the 2nd and 7th times that an abnormal
 condition is detected if it persists that long. If the notification interval is
 10 minutes, this would cause followup notifications to be sent at 10 minutes and
 1 hour.
+
+=item B<cookie_pattern>
+
+The value of this setting should be a string containing the sequence C<%c>. If not
+specified, it defaults to C<-b '%c'>, which is suitable for the C<curl> command. For
+each web service check, the C<%c> is substituted with the value of the 'cookie' setting
+if that value is non-empty.
 
 =item B<df_command>
 
@@ -1791,12 +1816,16 @@ value must be a list of entry names separated by spaces. When the group
 name is given as a command-line argument, all of the specified checks are
 executed.
 
-=head3 Remote web service check
+=head3 Web service check
 
-An entry of this type must include the key 'url' or 'url_command'. The specified
-command is used to fetch the specified URL, and the response is checked for the
-standard http response. A response code of 200 is considered normal, anything else is
-abnormal. The following keys are accepted:
+An entry of this type must include the key 'url' or 'url_command'. The specified command
+is used to fetch the specified URL, and the response is checked for the standard http
+response. A response code of 200 is considered normal, anything else is abnormal. The
+web service being checked may be either local or remote, but it is highly recommended to
+check web services remotely. That way, notification will be given if the server crashes
+or locks up completely.
+
+The following keys are accepted:
 
 =over 4
 
@@ -1813,11 +1842,14 @@ A command to be executed for this entry only.
 
 A followup pattern for this entry only.
 
+=item B<cookie_pattern>
+
+A cookie pattern for this entry only.
+
 =item B<cookie>
 
-A cookie to be passed to the server, i.e. "TEST=1". If the url command contains '%c',
-that token will be replaced by (in this case) the string "-b TEST=1". Admittedly, this
-will only be useful if the base command is 'curl'.
+A cookie to be passed to the server, i.e. "TEST=1". This will be included in the url
+command by way of the cookie_pattern.
 
 =back
 
