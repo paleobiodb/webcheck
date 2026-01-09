@@ -1,9 +1,17 @@
 
 recipients: $RECIPIENTS
-
+recipients_report: $RECIPIENTS
+ok_label: testing
 envelope_from: wc@myservice.com
-
 log_dir: logs
+log_file: webcheck.log
+state_dir: logs
+url_command: curl
+url_followup: 1 6
+df_command: df
+df_followup: 1 6
+sysinfo_command: top
+sysinfo_followup: 1 6
 
 checks:
   
@@ -16,4 +24,5 @@ checks:
     url_command: t/testcommand.pl %c
     cookie_pattern: -b '%c'
     cookie: TEST=1
-
+  
+  multitest: test1 urltest

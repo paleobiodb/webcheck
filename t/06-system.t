@@ -57,7 +57,7 @@ subtest 'state file' => sub {
     
     my $result = `cat logs/systest_state.txt`;
     
-    like($result, qr/ ^ OK [|] \d+ [|] [|] system $ /xs, 'state file content');
+    like($result, qr/ ^ OK [|] \d+ [|] 0 [|] [|] system $ /xs, 'state file content');
 
     (undef, $LAST_TIMESTAMP, undef, undef) = split /[|]/, $result;
 };
@@ -74,7 +74,7 @@ subtest 'notify warn' => sub {
     
     my $check = $result =~ /^Notify WARN system[\n\r]+WARN \ds system[\n\r]+[*] load 2.1 [*][\n\r]+[*] mem 80 [*][\n\r]+$/;
     
-    ok($check, 'notify produced WARN') || print STDERR "\n$result";
+    ok($check, 'notify produced WARN') || print STDERR ($result || 'EMPTY_RESULT');
     
     $result = `cat logs/webcheck.log`;
     
@@ -107,6 +107,14 @@ subtest 'notify warn' => sub {
     like($result, qr/\d\d:\d\d.*REPORT WARN \ds system$/m, 'report added to log');
     
     like($result, qr/\d\d:\d\d.*REPORT load 2.1 - mem 80$/m, 'report added details to log');
+    
+    $result = `script/webcheck -nf t/test.yml systest 2>&1`;
+    
+    $check = $result =~ /^Notify WARN system/;
+    
+    print STDERR ($result || 'EMPTY_RESULT') unless $check;
+    
+    ok($check, 'third notify produces warning');
 };
 
 
@@ -131,8 +139,8 @@ subtest 'notify higher' => sub {
     
     $result = `cat logs/systest_state.txt`;
     
-    like($result, qr/ ^ WARN [|] \d+ [|]load \s 2.5 \s - \s mem \s 80[|] system $ /xs,
-	 'state file contains max reached values');    
+    like($result, qr/ ^ WARN [|] \d+ [|] \d+ [|] load \s 2.5 \s - \s mem \s 80 [|] system $ /xs,
+	 'state file contains max reached values');
     
     $result = `script/webcheck -nf t/test.yml systest 2>&1`;
     
@@ -184,7 +192,7 @@ subtest 'notify warn2' => sub {
     
     $result = `cat logs/systest_state.txt`;
     
-    like($result, qr/ ^ WARN [|] \d+ [|]load \s 2.5 \s - \s mem \s 80 \s - \s swap \s 60 \s - \s procs \s 500 [|] system $ /xs,
+    like($result, qr/ ^ WARN [|] \d+ [|] \d+ [|] load \s 2.5 \s - \s mem \s 80 \s - \s swap \s 60 \s - \s procs \s 500 [|] system $ /xs,
 	 'state file contains max reached values');
     
     $result = `cat logs/systest_state.txt`;
@@ -212,7 +220,7 @@ subtest 'notify critical' => sub {
     
     $result = `cat logs/systest_state.txt`;
     
-    like($result, qr/ ^ CRITICAL [|] \d+ [|]load \s 4 \s - \s mem \s 65 \s - \s swap \s 100 \s - \s procs \s 600 [|] system $ /xs,
+    like($result, qr/ ^ CRITICAL [|] \d+ [|] \d+ [|] load \s 4 \s - \s mem \s 65 \s - \s swap \s 100 \s - \s procs \s 600 [|] system $ /xs,
 	 'state file contains new max values with new state');    
     
     $result = `cat logs/webcheck.log`;
@@ -248,7 +256,7 @@ subtest 'notify decreasing' => sub {
     
     $result = `cat logs/systest_state.txt`;
     
-    like($result, qr/ ^ WARN [|] \d+ [|]load \s 1.5 \s - \s mem \s 60 \s - \s procs \s 480 [|] system $ /xs,
+    like($result, qr/ ^ WARN [|] \d+ [|] \d+ [|] load \s 1.5 \s - \s mem \s 60 \s - \s procs \s 480 [|] system $ /xs,
 	 'state file contains new max values with new state');    
 
     $result = `cat logs/webcheck.log`;
@@ -257,7 +265,7 @@ subtest 'notify decreasing' => sub {
     
     my (@lines) = split /[\n\r]+/, $result;
     
-    cmp_ok(@lines, '==', 13, 'log had 13 lines');
+    cmp_ok(@lines, '==', 15, 'log had 15 lines');
     
     $result = `script/webcheck -nf t/test.yml systest 2>&1`;
     
@@ -285,7 +293,7 @@ subtest 'check' => sub {
 
     my (@lines) = split /[\n\r]+/, $result;
 
-    cmp_ok(@lines, '==', 13, 'check did not add to log');
+    cmp_ok(@lines, '==', 15, 'check did not add to log');
 };
 
 
@@ -299,6 +307,11 @@ subtest 'notify good again' => sub {
     my $check = $result =~ /^Notify OK system[\n\r]+OK \ds system[\n\r]+$/;
     
     ok($check, 'notify produced OK') || print STDERR "\n$result";
+    
+    $result = `cat logs/systest_state.txt`;
+    
+    like($result, qr/ ^ OK [|] \d+ [|] 0 [|] [|] system $ /xs,
+	 'state file back to ok');
     
     $result = `cat logs/webcheck.log`;
     

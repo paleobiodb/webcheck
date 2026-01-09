@@ -1,0 +1,11 @@
+#
+# This file contains a check without any sub-key to determine its type.
+
+
+ok_label: bad configuration
+
+checks:
+
+  bad_check:
+    label: foo
+

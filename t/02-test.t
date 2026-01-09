@@ -135,7 +135,7 @@ subtest 'check + notify 4' => sub {
     my $result = `script/webcheck -f t/test.yml test 2>&1`;
     
     my $check = $result eq <<END_CHECK;
-Check ERR test B; OK test A
+Check ERR test B
 OK test A
 ERR 3 test B
 END_CHECK

@@ -1,0 +1,8 @@
+#
+# This file contains a bad top-level key, and does not contain 'check'.
+
+
+foo: bar
+biff: baz
+ok_label: bad configuration
+

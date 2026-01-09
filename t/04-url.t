@@ -3,7 +3,7 @@
 
 use strict;
 
-use Test::More tests => 10;
+use Test::More tests => 11;
 
 subtest 'setup' => sub {
     
@@ -70,7 +70,7 @@ subtest 'cookie' => sub {
     
     my $result = `script/webcheck -rf t/test2.yml urltest 2>&1`;
 
-    my $check = $result =~ /^Report OK/;
+    my $check = $result =~ /^Report OK urltest/;
 
     print STDERR $result unless $check;
     
@@ -107,7 +107,7 @@ subtest 'followups' => sub {
     
     my $result = `script/webcheck -nf t/test.yml urltest 2>&1`;
     
-    my $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
+    my $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN \ds test service [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -115,7 +115,7 @@ subtest 'followups' => sub {
     
     $result = `script/webcheck -rf t/test.yml urltest 2>&1`;
     
-    $check = $result =~ /^Report DOWN test service[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
+    $check = $result =~ /^Report DOWN test service[\n\r]+DOWN \ds test service [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -129,7 +129,7 @@ subtest 'followups' => sub {
     
     $result = `script/webcheck --report -f t/test.yml urltest 2>&1`;
     
-    $check = $result =~ /^Report DOWN test service[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
+    $check = $result =~ /^Report DOWN test service[\n\r]+DOWN \ds test service [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -137,7 +137,7 @@ subtest 'followups' => sub {
     
     $result = `script/webcheck -nf t/test.yml urltest 2>&1`;
     
-    $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN test service [12]s [(]504[)][\n\r]+$/s;
+    $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN \ds test service [(]504[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -161,7 +161,7 @@ subtest 'no response' => sub {
     
     my $result = `script/webcheck -nf t/test.yml urltest 2>&1`;
     
-    my $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN test service [12]s [(]NOR[)][\n\r]+$/s;
+    my $check = $result =~ /^Notify DOWN test service[\n\r]+DOWN \ds test service [(]NOR[)][\n\r]+$/s;
     
     print STDERR $result unless $check;
     
@@ -180,13 +180,30 @@ subtest 'no response' => sub {
 };
 
 
+subtest 'valid_url' => sub {
+
+    my $result = `script/webcheck -f t/test3.yml urltest2 2>&1`;
+    
+    is($result, <<END_LITERAL, 'invalid url');
+ERROR: urltest2: 'foobar' does not look like a URL, in t/test3.yml
+END_LITERAL
+    
+    $result = `script/webcheck -f t/test3.yml urltest3 2>&1`;
+    
+    is($result, <<END_LITERAL, 'invalid url with valid_url set');
+Check OK urltest3
+OK urltest3
+END_LITERAL
+};
+
+
 subtest 'real site' => sub {
 
     # Check the status of github.com, which is an HTTP/2 site.
     
     my $result = `script/webcheck -rf t/test.yml urltest2 2>&1`;
 
-    my $check = $result =~ /^Report OK real service/s;
+    my $check = $result =~ /^Report OK urltest2/s;
 
     print STDERR ($result || 'EMPTY_RESULT') unless $check;
     

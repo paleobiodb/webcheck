@@ -1,0 +1,17 @@
+#
+# This file contains a df check with bad limit values.
+
+
+ok_label: bad configuration
+
+checks:
+
+  bad_df:
+    limit: 50
+    state_file: foo.state
+
+  bad_url:
+    url: test.com
+    state_file: foo.state
+
+

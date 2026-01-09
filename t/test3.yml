@@ -1,0 +1,12 @@
+
+checks:
+
+  urltest2:
+    url_command: echo %u > /dev/null; cat t/urltest.good
+    url: foobar
+
+  urltest3:
+    url_command: echo %u > /dev/null; cat t/urltest.good
+    url: foobar
+    valid_url: true
+  

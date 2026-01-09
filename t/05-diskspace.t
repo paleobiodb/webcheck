@@ -59,7 +59,7 @@ subtest 'state file' => sub {
     
     my $result = `cat logs/dftest_state.txt`;
     
-    like($result, qr/ ^ OK [|] \d+ [|] [|] diskspace $ /xs,
+    like($result, qr/ ^ OK [|] \d+ [|] 0 [|] [|] diskspace $ /xs,
 	 'state file content');
 };
 
@@ -73,7 +73,7 @@ subtest 'notify warn' => sub {
     
     my $check = $result =~ /^Notify WARN diskspace[\n\r]+WARN \ds diskspace[\n\r]+[*] \/var 90 [*][\n\r]+$/;
     
-    print STDERR $result unless $check;
+    print STDERR ($result || 'EMPTY RESULT') unless $check;
     
     ok($check, 'notify produced WARN 90');
     
@@ -88,6 +88,16 @@ subtest 'notify warn' => sub {
     $result = `script/webcheck -nf t/test.yml dftest 2>&1`;
     
     is($result, '', 'second notify produces empty');
+    
+    $DB::single = 1;
+    
+    $result = `script/webcheck -nf t/test.yml dftest 2>&1`;
+    
+    $check = $result =~ /^Notify WARN diskspace/;
+    
+    print STDERR ($result || 'EMPTY RESULT') unless $check;
+    
+    ok($check, 'third notify produces warning');
 };
 
 
@@ -137,7 +147,7 @@ subtest 'notify most' => sub {
     
     my @lines = split /[\n\r]+/, $result;
     
-    is(scalar(@lines), 7, 'count log lines');
+    is(scalar(@lines), 9, 'count log lines');
 };
 
 
@@ -169,7 +179,7 @@ subtest 'check' => sub {
     
     my @lines = split /[\n\r]+/, $result;
     
-    is(scalar(@lines), 7, 'check did not add to log');
+    is(scalar(@lines), 9, 'check did not add to log');
 };
 
 
@@ -187,7 +197,7 @@ subtest 'report' => sub {
     
     my @lines = split /[\n\r]+/, $result;
     
-    is(scalar(@lines), 9, 'report added to log');
+    is(scalar(@lines), 11, 'report added to log');
 };
 
 

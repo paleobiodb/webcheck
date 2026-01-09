@@ -27,7 +27,7 @@ ok($check, 'webcheck executes successfully') ||
 $result = `cd t; ../script/webcheck 2>&1`;
 
 $check = $result eq <<END_CHECK;
-Check OK test1, test2, test4, test3
+Check OK webcheck
 OK test1
 OK test2
 OK test4
@@ -36,7 +36,7 @@ END_CHECK
 
 unless ( $check )
 {
-    print STDERR $result;
+    print STDERR ($result || 'EMPTY RESULT');
 };
 
 ok($check, 'default configuration file');
